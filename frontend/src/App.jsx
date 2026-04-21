@@ -142,6 +142,7 @@ import DeliveryOrders from "./modules/Delivery/pages/Orders";
 import DeliveryOrderDetail from "./modules/Delivery/pages/OrderDetail";
 import DeliveryProfile from "./modules/Delivery/pages/Profile";
 import DeliveryNotifications from "./modules/Delivery/pages/Notifications";
+import DeliveryEarnings from "./modules/Delivery/pages/Earnings";
 // Vendor Routes
 import VendorLogin from "./modules/Vendor/pages/Login";
 import VendorRegister from "./modules/Vendor/pages/Register";
@@ -550,6 +551,7 @@ const AppRoutes = () => {
         <Route path="orders/:id" element={<DeliveryOrderDetail />} />
         <Route path="notifications" element={<DeliveryNotifications />} />
         <Route path="profile" element={<DeliveryProfile />} />
+        <Route path="earnings" element={<DeliveryEarnings />} />
       </Route>
       {/* Vendor Routes */}
       <Route path="/vendor/login" element={<VendorLogin />} />

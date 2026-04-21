@@ -265,7 +265,7 @@ const AssignDelivery = () => {
                     { value: "", label: "Select Delivery Boy" },
                     ...deliveryBoys.map((boy) => ({
                       value: String(boy.id || boy._id),
-                      label: `${boy.name} (${boy.phone || "N/A"})`,
+                      label: `${boy.name} (${boy.status || 'offline'}) - ${boy.phone || "N/A"}`,
                     })),
                   ]}
                 />

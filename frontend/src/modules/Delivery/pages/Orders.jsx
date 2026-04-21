@@ -6,6 +6,7 @@ import PageTransition from '../../../shared/components/PageTransition';
 import { formatPrice } from '../../../shared/utils/helpers';
 import toast from 'react-hot-toast';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
+import OtpModal from '../components/OtpModal';
 
 const DeliveryOrders = () => {
   const navigate = useNavigate();
@@ -21,6 +22,8 @@ const DeliveryOrders = () => {
   const [filter, setFilter] = useState('all'); // all, pending(open), in-transit, completed
   const [loadFailed, setLoadFailed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const PAGE_SIZE = 20;
 
   const getBackendStatusFilter = (value) => {
@@ -53,6 +56,8 @@ const DeliveryOrders = () => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'processing':
+        return 'bg-purple-100 text-purple-800 border-purple-300';
       case 'in-transit':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'completed':
@@ -68,6 +73,8 @@ const DeliveryOrders = () => {
     switch (status) {
       case 'pending':
         return <FiClock className="text-yellow-600" />;
+      case 'processing':
+        return <FiPackage className="text-purple-600" />;
       case 'in-transit':
         return <FiNavigation className="text-blue-600" />;
       case 'completed':
@@ -83,25 +90,15 @@ const DeliveryOrders = () => {
     try {
       await acceptOrder(orderId);
       toast.success('Order accepted successfully');
+      loadOrders(currentPage, filter);
     } catch {
       // Error toast handled by API interceptor.
     }
   };
 
-  const handleCompleteOrder = async (orderId) => {
-    const otp = window.prompt('Enter 6-digit delivery OTP shared by customer:');
-    if (otp === null) return;
-    if (!/^\d{6}$/.test(String(otp).trim())) {
-      toast.error('Please enter a valid 6-digit OTP');
-      return;
-    }
-
-    try {
-      await completeOrder(orderId, String(otp).trim());
-      toast.success('Order marked as delivered');
-    } catch {
-      // Error toast handled by API interceptor.
-    }
+  const handleCompleteOrder = (orderId) => {
+    setSelectedOrderId(orderId);
+    setIsOtpModalOpen(true);
   };
 
   const handlePreviousPage = () => {
@@ -302,6 +299,13 @@ const DeliveryOrders = () => {
             </button>
           </div>
         )}
+
+        <OtpModal
+          isOpen={isOtpModalOpen}
+          orderId={selectedOrderId}
+          onClose={() => setIsOtpModalOpen(false)}
+          onSuccess={() => loadOrders(currentPage, filter)}
+        />
       </div>
     </PageTransition>
   );

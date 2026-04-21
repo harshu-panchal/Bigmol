@@ -20,6 +20,7 @@ const DeliveryDashboard = () => {
     completedToday: 0,
     openOrders: 0,
     earnings: 0,
+    cashInHand: 0,
   });
   const statCards = [
     {
@@ -53,6 +54,16 @@ const DeliveryDashboard = () => {
       color: 'bg-purple-500',
       bgColor: 'bg-purple-50',
       textColor: 'text-purple-700',
+      onClick: () => navigate('/delivery/earnings'),
+    },
+    {
+      icon: FiPackage,
+      label: 'Cash in Hand',
+      value: formatPrice(stats.cashInHand),
+      color: 'bg-indigo-500',
+      bgColor: 'bg-indigo-50',
+      textColor: 'text-indigo-700',
+      onClick: () => navigate('/delivery/earnings'),
     },
   ];
 
@@ -68,6 +79,7 @@ const DeliveryDashboard = () => {
         completedToday: Number(summary.completedToday || 0),
         openOrders: Number(summary.openOrders || 0),
         earnings: Number(summary.earnings || 0),
+        cashInHand: Number(summary.cashInHand || 0),
       });
     } catch {
       setLoadFailed(true);
@@ -77,6 +89,7 @@ const DeliveryDashboard = () => {
         completedToday: 0,
         openOrders: 0,
         earnings: 0,
+        cashInHand: 0,
       });
     } finally {
       setIsDashboardLoading(false);
@@ -113,10 +126,12 @@ const DeliveryDashboard = () => {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getDashboardStatusColor = (status) => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
+      case 'processing':
+        return 'bg-purple-100 text-purple-800';
       case 'in-transit':
         return 'bg-blue-100 text-blue-800';
       case 'completed':
@@ -226,7 +241,8 @@ const DeliveryDashboard = () => {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: index * 0.1 }}
-                className={`${stat.bgColor} rounded-xl p-4`}
+                onClick={stat.onClick}
+                className={`${stat.bgColor} rounded-xl p-4 cursor-pointer hover:shadow-md transition-all active:scale-95`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <Icon className={`${stat.textColor} text-xl`} />
@@ -300,7 +316,7 @@ const DeliveryDashboard = () => {
                     <p className="font-semibold text-gray-800">{order.id}</p>
                     <p className="text-sm text-gray-600">{order.customer}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getDashboardStatusColor(order.status)}`}>
                     {order.status}
                   </span>
                 </div>

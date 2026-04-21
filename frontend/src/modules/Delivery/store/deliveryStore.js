@@ -22,7 +22,8 @@ const normalizeDeliveryBoy = (raw) => {
 const mapBackendStatusToUI = (status) => {
   if (status === 'shipped') return 'in-transit';
   if (status === 'delivered') return 'completed';
-  if (status === 'pending' || status === 'processing') return 'pending';
+  if (status === 'processing') return 'processing';
+  if (status === 'pending') return 'pending';
   return status || 'pending';
 };
 
@@ -85,8 +86,14 @@ export const useDeliveryAuthStore = create(
       selectedOrder: null,
       isLoadingOrders: false,
       isLoadingOrder: false,
-      isUpdatingOrderStatus: false,
       isUpdatingStatus: false,
+      locationTrackingInterval: null,
+      earnings: {
+        totalDeliveries: 0,
+        totalEarnings: 0,
+        pendingCash: 0,
+        settledCash: 0
+      },
 
       // Delivery boy login action
       register: async (registrationData) => {
@@ -200,12 +207,7 @@ export const useDeliveryAuthStore = create(
       },
 
       // Delivery boy logout action
-      logout: () => {
-        const refreshToken = localStorage.getItem('delivery-refresh-token');
-        if (refreshToken) {
-          api.post('/delivery/auth/logout', { refreshToken }).catch(() => {});
-        }
-
+        get().stopLocationTracking();
         set({
           deliveryBoy: null,
           token: null,
@@ -219,6 +221,7 @@ export const useDeliveryAuthStore = create(
             pages: 1,
           },
           selectedOrder: null,
+          locationTrackingInterval: null,
         });
         localStorage.removeItem('delivery-token');
         localStorage.removeItem('delivery-refresh-token');
@@ -428,6 +431,70 @@ export const useDeliveryAuthStore = create(
               isAuthenticated: true,
             });
           }
+        }
+      },
+
+      fetchEarnings: async (period = 'all') => {
+        try {
+          const response = await api.get('/delivery/orders/earnings', { params: { period } });
+          const payload = response.data || response;
+          set({ earnings: payload });
+          return payload;
+        } catch (error) {
+          console.error('Failed to fetch earnings:', error);
+          return null;
+        }
+      },
+
+      updateAvatar: async (file) => {
+        set({ isLoading: true });
+        try {
+          const formData = new FormData();
+          formData.append('avatar', file);
+          const response = await api.post('/delivery/auth/avatar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const payload = response.data || response;
+          const current = get().deliveryBoy;
+          if (current) {
+            set({ deliveryBoy: { ...current, avatar: payload.avatar } });
+          }
+          set({ isLoading: false });
+          return payload.avatar;
+        } catch (error) {
+          set({ isLoading: false });
+          throw error;
+        }
+      },
+
+      startLocationTracking: () => {
+        if (get().locationTrackingInterval) return;
+        
+        // Track immediately then every 30s
+        const update = () => {
+          if (!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              api.patch('/delivery/auth/location', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude
+              }).catch(() => {});
+            },
+            null,
+            { enableHighAccuracy: true }
+          );
+        };
+
+        update();
+        const intervalId = setInterval(update, 30000);
+        set({ locationTrackingInterval: intervalId });
+      },
+
+      stopLocationTracking: () => {
+        const intervalId = get().locationTrackingInterval;
+        if (intervalId) {
+          clearInterval(intervalId);
+          set({ locationTrackingInterval: null });
         }
       },
     }),
