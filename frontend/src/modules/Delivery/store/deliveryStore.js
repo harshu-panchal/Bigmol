@@ -207,6 +207,7 @@ export const useDeliveryAuthStore = create(
       },
 
       // Delivery boy logout action
+      logout: () => {
         get().stopLocationTracking();
         set({
           deliveryBoy: null,
@@ -504,4 +505,3 @@ export const useDeliveryAuthStore = create(
     }
   )
 );
-
