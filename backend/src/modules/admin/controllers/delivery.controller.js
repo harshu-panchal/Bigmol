@@ -125,6 +125,35 @@ export const getAllDeliveryBoys = asyncHandler(async (req, res) => {
         };
     });
 
+    // Global Cash stats across all delivery boys
+    const globalStats = await Order.aggregate([
+        { $match: { deliveryBoyId: { $exists: true }, isDeleted: { $ne: true } } },
+        {
+            $group: {
+                _id: null,
+                totalPending: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $eq: ['$status', 'delivered'] },
+                                    { $in: ['$paymentMethod', ['cod', 'cash']] },
+                                    { $ne: ['$isCashSettled', true] }
+                                ]
+                            },
+                            '$total',
+                            0
+                        ]
+                    }
+                }
+            }
+        }
+    ]);
+
+    const totalCollectedFromModels = await DeliveryBoy.aggregate([
+        { $group: { _id: null, total: { $sum: '$cashCollected' } } }
+    ]);
+
     res.status(200).json(
         new ApiResponse(200, {
             deliveryBoys: boysWithStats,
@@ -132,7 +161,9 @@ export const getAllDeliveryBoys = asyncHandler(async (req, res) => {
                 total,
                 page: numericPage,
                 limit: numericLimit,
-                pages: Math.ceil(total / numericLimit)
+                pages: Math.ceil(total / numericLimit),
+                globalCashInHand: globalStats?.[0]?.totalPending || 0,
+                globalCashCollected: totalCollectedFromModels?.[0]?.total || 0
             }
         }, 'Delivery boys fetched successfully')
     );

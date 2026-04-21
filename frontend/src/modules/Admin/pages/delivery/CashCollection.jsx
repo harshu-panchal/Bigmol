@@ -70,8 +70,9 @@ const CashCollection = () => {
     return true;
   });
 
-  const totalCollected = boysWithCash.reduce((sum, boy) => sum + Number(boy.cashCollected || 0), 0);
-  const totalPending = boysWithCash.reduce((sum, boy) => sum + Number(boy.cashInHand || 0), 0);
+  // Use global stats from pagination metadata
+  const totalCollected = pagination.globalCashCollected || 0;
+  const totalPending = pagination.globalCashInHand || 0;
 
   const handleSettleCash = async (row) => {
     if (!row?.id || Number(row.cashInHand || 0) <= 0) return;
