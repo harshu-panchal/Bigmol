@@ -868,7 +868,9 @@ const AllOrders = () => {
 
           <div className="w-full sm:w-auto">
             <ExportButton
-              data={filteredOrders}
+              data={selectedOrderIds.length > 0 
+                ? filteredOrders.filter(o => selectedOrderIds.includes(o.id))
+                : filteredOrders}
               headers={[
                 { label: "Order ID", accessor: (row) => row.id },
                 { label: "Customer", accessor: (row) => row.customer.name },

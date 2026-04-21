@@ -71,10 +71,10 @@ const Analytics = () => {
             totalOrders: stats.totalOrders || 0,
             totalProducts: stats.totalProducts || 0,
             totalCustomers: stats.totalUsers || 0,
-            revenueChange: 0,
-            ordersChange: 0,
-            productsChange: 0,
-            customersChange: 0,
+            revenueChange: stats.revenueChange || 0,
+            ordersChange: stats.ordersChange || 0,
+            productsChange: stats.productsChange || 0,
+            customersChange: stats.customersChange || 0,
           });
         }
 

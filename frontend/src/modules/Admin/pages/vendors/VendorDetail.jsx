@@ -429,9 +429,17 @@ const VendorDetail = () => {
                     </div>
                     <div className="bg-purple-50 rounded-lg p-4">
                       <p className="text-xs text-purple-600 mb-1">
-                        Commission Rate
+                        Product Count
                       </p>
                       <p className="text-2xl font-bold text-purple-800">
+                        {vendor.productCount || 0}
+                      </p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-4">
+                      <p className="text-xs text-indigo-600 mb-1">
+                        Commission Rate
+                      </p>
+                      <p className="text-2xl font-bold text-indigo-800">
                         {((vendor.commissionRate || 0) * 100).toFixed(1)}%
                       </p>
                     </div>

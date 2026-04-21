@@ -6,95 +6,104 @@ import Vendor from '../../../models/Vendor.model.js';
 import Product from '../../../models/Product.model.js';
 
 // Simple memory cache for analytics
-const dashboardCache = new Map();
+const analyticsCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const withCache = async (key, fetcher) => {
+    const cached = analyticsCache.get(key);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+        return cached.data;
+    }
+    const data = await fetcher();
+    analyticsCache.set(key, { timestamp: Date.now(), data });
+    return data;
+};
 
 // GET /api/admin/analytics/dashboard
 export const getDashboardStats = asyncHandler(async (req, res) => {
     const { period = 'month' } = req.query;
-    
-    // Check cache
     const cacheKey = `dashboard_${period}`;
-    const cached = dashboardCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-        return res.status(200).json(new ApiResponse(200, cached.data, 'Dashboard stats fetched (cached).'));
-    }
 
-    const activeOrderFilter = { isDeleted: { $ne: true } };
-    
-    // Define time ranges
-    const now = new Date();
-    let startDate = new Date();
-    let prevStartDate = new Date();
-    
-    if (period === 'week') {
-        startDate.setDate(now.getDate() - 7);
-        prevStartDate.setDate(now.getDate() - 14);
-    } else if (period === 'today') {
-        startDate.setHours(0, 0, 0, 0);
-        prevStartDate.setDate(now.getDate() - 1);
-        prevStartDate.setHours(0, 0, 0, 0);
-    } else {
-        // default month
-        startDate.setMonth(now.getMonth() - 1);
-        prevStartDate.setMonth(now.getMonth() - 2);
-    }
+    const analyticsData = await withCache(cacheKey, async () => {
+        const activeOrderFilter = { isDeleted: { $ne: true } };
+        
+        // Define time ranges
+        const now = new Date();
+        let startDate = new Date();
+        let prevStartDate = new Date();
+        
+        if (period === 'week') {
+            startDate.setDate(now.getDate() - 7);
+            prevStartDate.setDate(now.getDate() - 14);
+        } else if (period === 'today') {
+            startDate.setHours(0, 0, 0, 0);
+            prevStartDate.setDate(now.getDate() - 1);
+            prevStartDate.setHours(0, 0, 0, 0);
+        } else {
+            // default month
+            startDate.setMonth(now.getMonth() - 1);
+            prevStartDate.setMonth(now.getMonth() - 2);
+        }
 
-    const [
-        totalOrders, 
-        totalUsers, 
-        totalVendors, 
-        totalProducts, 
-        revenueAgg, 
-        pendingOrders,
-        prevRevenueAgg,
-        prevOrdersCount,
-        prevUsersCount
-    ] = await Promise.all([
-        Order.countDocuments(activeOrderFilter),
-        User.countDocuments({ role: 'customer' }),
-        Vendor.countDocuments({ status: 'approved' }),
-        Product.countDocuments({ isActive: true }),
-        Order.aggregate([
-            { $match: { ...activeOrderFilter, status: { $ne: 'cancelled' }, createdAt: { $gte: startDate } } }, 
-            { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
-        ]),
-        Order.countDocuments({ ...activeOrderFilter, status: 'pending' }),
-        // Previous period for comparison
-        Order.aggregate([
-            { $match: { ...activeOrderFilter, status: { $ne: 'cancelled' }, createdAt: { $gte: prevStartDate, $lt: startDate } } }, 
-            { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
-        ]),
-        Order.countDocuments({ ...activeOrderFilter, createdAt: { $gte: prevStartDate, $lt: startDate } }),
-        User.countDocuments({ role: 'customer', createdAt: { $gte: prevStartDate, $lt: startDate } })
-    ]);
+        const [
+            totalOrders, 
+            totalUsers, 
+            totalVendors, 
+            totalProducts, 
+            revenueAgg, 
+            pendingOrders,
+            prevRevenueAgg,
+            prevOrdersCount,
+            prevUsersCount,
+            prevProductsCount,
+            productCountCurrent,
+            userCountCurrent
+        ] = await Promise.all([
+            Order.countDocuments(activeOrderFilter),
+            User.countDocuments({ role: 'customer' }),
+            Vendor.countDocuments({ status: 'approved' }),
+            Product.countDocuments({ isActive: true }),
+            Order.aggregate([
+                { $match: { ...activeOrderFilter, status: { $ne: 'cancelled' }, createdAt: { $gte: startDate } } }, 
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+            ]),
+            Order.countDocuments({ ...activeOrderFilter, status: 'pending' }),
+            // Previous period for comparison
+            Order.aggregate([
+                { $match: { ...activeOrderFilter, status: { $ne: 'cancelled' }, createdAt: { $gte: prevStartDate, $lt: startDate } } }, 
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+            ]),
+            Order.countDocuments({ ...activeOrderFilter, createdAt: { $gte: prevStartDate, $lt: startDate } }),
+            User.countDocuments({ role: 'customer', createdAt: { $gte: prevStartDate, $lt: startDate } }),
+            Product.countDocuments({ isActive: true, createdAt: { $gte: prevStartDate, $lt: startDate } }),
+            Product.countDocuments({ isActive: true, createdAt: { $gte: startDate } }),
+            User.countDocuments({ role: 'customer', createdAt: { $gte: startDate } })
+        ]);
 
-    const currentRevenue = revenueAgg[0]?.total || 0;
-    const prevRevenue = prevRevenueAgg[0]?.total || 0;
-    const currentOrders = revenueAgg[0]?.count || 0;
-    const prevOrders = prevRevenueAgg[0]?.count || 0;
+        const currentRevenue = revenueAgg[0]?.total || 0;
+        const prevRevenue = prevRevenueAgg[0]?.total || 0;
+        const currentOrders = revenueAgg[0]?.count || 0;
+        const prevOrders = prevRevenueAgg[0]?.count || 0;
+        const currentProductsCount = productCountCurrent;
+        const currentCustomersCount = userCountCurrent;
 
-    const calculateChange = (current, previous) => {
-        if (previous === 0) return current > 0 ? 100 : 0;
-        return Math.round(((current - previous) / previous) * 100);
-    };
+        const calculateChange = (current, previous) => {
+            if (previous === 0) return current > 0 ? 100 : 0;
+            return Math.round(((current - previous) / previous) * 100);
+        };
 
-    const analyticsData = {
-        totalOrders,
-        totalUsers,
-        totalVendors,
-        totalProducts,
-        totalRevenue: currentRevenue,
-        pendingOrders,
-        revenueChange: calculateChange(currentRevenue, prevRevenue),
-        ordersChange: calculateChange(currentOrders, prevOrders),
-        customersChange: calculateChange(totalUsers, prevUsersCount), // Global growth
-    };
-
-    // Update cache
-    dashboardCache.set(cacheKey, {
-        timestamp: Date.now(),
-        data: analyticsData
+        return {
+            totalOrders,
+            totalUsers,
+            totalVendors,
+            totalProducts,
+            totalRevenue: currentRevenue,
+            pendingOrders,
+            revenueChange: calculateChange(currentRevenue, prevRevenue),
+            ordersChange: calculateChange(currentOrders, prevOrders),
+            customersChange: calculateChange(currentCustomersCount, prevUsersCount),
+            productsChange: calculateChange(currentProductsCount, prevProductsCount),
+        };
     });
 
     res.status(200).json(new ApiResponse(200, analyticsData, 'Dashboard stats fetched.'));
@@ -103,37 +112,46 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 // GET /api/admin/analytics/revenue
 export const getRevenueData = asyncHandler(async (req, res) => {
     const { period = 'monthly', startDate, endDate } = req.query;
-    const groupFormat = period === 'daily' ? '%Y-%m-%d' : period === 'weekly' ? '%Y-%U' : '%Y-%m';
-    const match = { isDeleted: { $ne: true }, status: { $ne: 'cancelled' } };
-    if (startDate || endDate) {
-        match.createdAt = {};
-        if (startDate) match.createdAt.$gte = new Date(startDate);
-        if (endDate) match.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
-    }
+    const cacheKey = `revenue_${period}_${startDate}_${endDate}`;
 
-    const pipeline = [
-        { $match: match },
-        { $group: { _id: { $dateToString: { format: groupFormat, date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
-    ];
-    if (!startDate && !endDate) {
-        pipeline.push({ $sort: { _id: -1 } }, { $limit: 12 });
-    }
-    pipeline.push({ $sort: { _id: 1 } });
+    const revenue = await withCache(cacheKey, async () => {
+        const groupFormat = period === 'daily' ? '%Y-%m-%d' : period === 'weekly' ? '%Y-%U' : '%Y-%m';
+        const match = { isDeleted: { $ne: true }, status: { $ne: 'cancelled' } };
+        if (startDate || endDate) {
+            match.createdAt = {};
+            if (startDate) match.createdAt.$gte = new Date(startDate);
+            if (endDate) match.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+        }
 
-    const revenue = await Order.aggregate(pipeline);
+        const pipeline = [
+            { $match: match },
+            { $group: { _id: { $dateToString: { format: groupFormat, date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
+        ];
+        if (!startDate && !endDate) {
+            pipeline.push({ $sort: { _id: -1 } }, { $limit: 12 });
+        }
+        pipeline.push({ $sort: { _id: 1 } });
+
+        return await Order.aggregate(pipeline);
+    });
 
     res.status(200).json(new ApiResponse(200, revenue, 'Revenue data fetched.'));
 });
 
 // GET /api/admin/analytics/order-status
 export const getOrderStatusBreakdown = asyncHandler(async (req, res) => {
-    const breakdown = await Order.aggregate([
-        { $match: { isDeleted: { $ne: true } } },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-    ]);
+    const cacheKey = 'order_status_breakdown';
+    
+    const result = await withCache(cacheKey, async () => {
+        const breakdown = await Order.aggregate([
+            { $match: { isDeleted: { $ne: true } } },
+            { $group: { _id: '$status', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+        ]);
 
-    const result = breakdown.map(item => ({ status: item._id, count: item.count }));
+        return breakdown.map(item => ({ status: item._id, count: item.count }));
+    });
+
     res.status(200).json(new ApiResponse(200, result, 'Order status breakdown fetched.'));
 });
 

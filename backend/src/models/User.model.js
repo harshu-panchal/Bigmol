@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema(
         role: { type: String, enum: ['customer', 'delivery'], default: 'customer', index: true },
         userType: { type: String, enum: ['retailer', 'wholesaler'], default: 'retailer' },
         isVerified: { type: Boolean, default: false },
-        isActive: { type: Boolean, default: true },
+        isActive: { type: Boolean, default: true, index: true },
         otp: { type: String, select: false },
         otpExpiry: { type: Date, select: false },
         resetOtp: { type: String, select: false },
