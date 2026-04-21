@@ -133,6 +133,24 @@ export const getDashboardSummary = asyncHandler(async (req, res) => {
         return acc;
     }, {});
 
+    const cashInHand = await Order.aggregate([
+        {
+            $match: {
+                deliveryBoyId: new mongoose.Types.ObjectId(deliveryBoyId),
+                status: 'delivered',
+                paymentMethod: { $in: ['cod', 'cash'] },
+                isCashSettled: { $ne: true },
+                isDeleted: { $ne: true },
+            },
+        },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: '$total' },
+            },
+        },
+    ]);
+
     const summary = {
         totalOrders:
             Number(countByStatus.pending || 0) +
@@ -142,8 +160,12 @@ export const getDashboardSummary = asyncHandler(async (req, res) => {
             Number(countByStatus.cancelled || 0) +
             Number(countByStatus.returned || 0),
         completedToday: Number(completedTodayCount || 0),
-        openOrders: Number(countByStatus.pending || 0) + Number(countByStatus.processing || 0),
+        openOrders: 
+            Number(countByStatus.pending || 0) + 
+            Number(countByStatus.processing || 0) +
+            Number(countByStatus.shipped || 0),
         earnings: Number(earningsStats?.[0]?.totalDeliveryFees || 0),
+        cashInHand: Number(cashInHand?.[0]?.total || 0),
         recentOrders,
     };
 
@@ -317,6 +339,11 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
     }
     await order.save();
 
+    if (status === 'delivered') {
+        // Increment total deliveries for the delivery boy
+        await DeliveryBoy.findByIdAndUpdate(req.user.id, { $inc: { totalDeliveries: 1 } });
+    }
+
     const statusNotificationTasks = [];
     if (order.userId) {
         statusNotificationTasks.push(
@@ -417,9 +444,13 @@ export const resendDeliveryOtp = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, null, 'Delivery OTP resent successfully.'));
 });
 
-// GET /api/delivery/orders/:id/debug-otp (non-production only)
+/**
+ * @desc    Get delivery OTP for debug (Non-production only)
+ * @route   GET /api/delivery/orders/:id/debug-otp
+ * @access  Private (Delivery Boy)
+ */
 export const getDeliveryOtpForDebug = asyncHandler(async (req, res) => {
-    if (IS_PRODUCTION) {
+    if (IS_PRODUCTION || process.env.ENABLE_DEBUG_ROUTES !== 'true') {
         throw new ApiError(404, 'Route not found.');
     }
 

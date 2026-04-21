@@ -69,35 +69,41 @@ export const getAllDeliveryBoys = asyncHandler(async (req, res) => {
 
     const total = await DeliveryBoy.countDocuments(filter);
 
-    // Aggregate stats for each delivery boy
-    const boysWithStats = await Promise.all(deliveryBoys.map(async (boy) => {
-        const stats = await Order.aggregate([
-            { $match: { deliveryBoyId: boy._id } },
-            {
-                $group: {
-                    _id: null,
-                    totalDeliveries: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-                    pendingDeliveries: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing', 'shipped']] }, 1, 0] } },
-                    cashInHand: {
-                        $sum: {
-                            $cond: [
-                                {
-                                    $and: [
-                                        { $eq: ['$status', 'delivered'] },
-                                        { $in: ['$paymentMethod', ['cod', 'cash']] },
-                                        { $ne: ['$isCashSettled', true] }
-                                    ]
-                                },
-                                '$total',
-                                0
-                            ]
-                        }
+    // Optimized Aggregate: Get stats for all delivery boys in the current page in one go
+    const deliveryBoyIds = deliveryBoys.map(boy => boy._id);
+    const allStats = await Order.aggregate([
+        { $match: { deliveryBoyId: { $in: deliveryBoyIds }, isDeleted: { $ne: true } } },
+        {
+            $group: {
+                _id: '$deliveryBoyId',
+                totalDeliveries: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+                pendingDeliveries: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing', 'shipped']] }, 1, 0] } },
+                cashInHand: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $eq: ['$status', 'delivered'] },
+                                    { $in: ['$paymentMethod', ['cod', 'cash']] },
+                                    { $ne: ['$isCashSettled', true] }
+                                ]
+                            },
+                            '$total',
+                            0
+                        ]
                     }
                 }
             }
-        ]);
+        }
+    ]);
 
-        const boyStats = stats.length > 0 ? stats[0] : { totalDeliveries: 0, pendingDeliveries: 0, cashInHand: 0 };
+    const statsMap = allStats.reduce((acc, stat) => {
+        acc[stat._id.toString()] = stat;
+        return acc;
+    }, {});
+
+    const boysWithStats = deliveryBoys.map((boy) => {
+        const boyStats = statsMap[boy._id.toString()] || { totalDeliveries: 0, pendingDeliveries: 0, cashInHand: 0 };
         return {
             ...boy._doc,
             id: boy._id,
@@ -117,7 +123,7 @@ export const getAllDeliveryBoys = asyncHandler(async (req, res) => {
                 cashInHand: boyStats.cashInHand
             }
         };
-    }));
+    });
 
     res.status(200).json(
         new ApiResponse(200, {

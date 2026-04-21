@@ -55,5 +55,8 @@ deliveryBoySchema.methods.comparePassword = async function (candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
+deliveryBoySchema.index({ email: 1 });
+deliveryBoySchema.index({ isActive: 1, status: 1 });
+
 const DeliveryBoy = mongoose.model('DeliveryBoy', deliveryBoySchema);
 export default DeliveryBoy;
