@@ -139,6 +139,8 @@ router.delete('/delivery-boys/:id', ...adminAuth, validate(deliveryBoyIdParamSch
 router.patch('/delivery-boys/:id/status', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(updateDeliveryStatusSchema), deliveryController.updateDeliveryBoyStatus);
 router.patch('/delivery-boys/:id/application-status', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(updateDeliveryApplicationStatusSchema), deliveryController.updateDeliveryBoyApplicationStatus);
 router.post('/delivery-boys/:id/settle-cash', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(settleCashSchema), deliveryController.settleCash);
+router.post('/delivery-boys/:id/assign-order', ...adminAuth, deliveryController.assignOrder);
+router.delete('/delivery-boys/:id/unassign-order/:orderId', ...adminAuth, deliveryController.unassignOrder);
 
 // ─── Return Requests ──────────────────────────────────────────────────────────
 router.get('/return-requests', ...adminAuth, returnController.getAllReturnRequests);

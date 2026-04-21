@@ -6,7 +6,7 @@ import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
 import { authLimiter } from '../../../middlewares/rateLimiter.js';
 import { validate } from '../../../middlewares/validate.js';
-import { uploadDeliveryDocuments } from '../../../middlewares/upload.js';
+import { uploadDeliveryDocuments, uploadDeliveryAvatar } from '../../../middlewares/upload.js';
 import {
     loginSchema,
     registerSchema,
@@ -16,6 +16,7 @@ import {
     refreshTokenSchema,
     logoutSchema,
 } from '../validators/auth.validator.js';
+import { updateStatusSchema, locationUpdateSchema } from '../validators/order.validator.js';
 
 const router = Router();
 const deliveryAuth = [authenticate, authorize('delivery'), enforceAccountStatus];
@@ -40,8 +41,11 @@ router.post('/auth/refresh', validate(refreshTokenSchema), authController.refres
 router.post('/auth/logout', validate(logoutSchema), authController.logout);
 router.get('/auth/profile', ...deliveryAuth, authController.getProfile);
 router.put('/auth/profile', ...deliveryAuth, authController.updateProfile);
+router.patch('/auth/location', ...deliveryAuth, validate(locationUpdateSchema), authController.updateLocation);
+router.post('/auth/avatar', ...deliveryAuth, uploadDeliveryAvatar, authController.updateAvatar);
 
 // Orders
+router.get('/orders/earnings', ...deliveryAuth, orderController.getEarnings);
 router.get('/orders', ...deliveryAuth, orderController.getAssignedOrders);
 router.get('/orders/dashboard-summary', ...deliveryAuth, orderController.getDashboardSummary);
 router.get('/orders/profile-summary', ...deliveryAuth, orderController.getProfileSummary);
@@ -49,7 +53,7 @@ router.get('/orders/:id', ...deliveryAuth, orderController.getOrderDetail);
 if (!IS_PRODUCTION) {
     router.get('/orders/:id/debug-otp', ...deliveryAuth, orderController.getDeliveryOtpForDebug);
 }
-router.patch('/orders/:id/status', ...deliveryAuth, orderController.updateDeliveryStatus);
+router.patch('/orders/:id/status', ...deliveryAuth, validate(updateStatusSchema), orderController.updateDeliveryStatus);
 router.post('/orders/:id/resend-delivery-otp', ...deliveryAuth, orderController.resendDeliveryOtp);
 
 // Notifications

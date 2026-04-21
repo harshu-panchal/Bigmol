@@ -1,3 +1,4 @@
+import path from 'path';
 import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
@@ -306,4 +307,42 @@ export const updateProfile = asyncHandler(async (req, res) => {
         { new: true, runValidators: true }
     );
     res.status(200).json(new ApiResponse(200, deliveryBoy, 'Profile updated.'));
+});
+
+// PATCH /api/delivery/auth/location
+export const updateLocation = asyncHandler(async (req, res) => {
+    const { lat, lng } = req.body;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new ApiError(400, 'Latitude and longitude must be valid numbers.');
+    }
+
+    const deliveryBoy = await DeliveryBoy.findByIdAndUpdate(
+        req.user.id,
+        { currentLocation: { lat, lng } },
+        { new: true }
+    ).select('currentLocation updatedAt');
+
+    if (!deliveryBoy) throw new ApiError(404, 'Delivery boy not found.');
+
+    res.status(200).json(new ApiResponse(200, deliveryBoy, 'Location updated.'));
+});
+
+// POST /api/delivery/auth/avatar
+export const updateAvatar = asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, 'Avatar image is required.');
+
+    const deliveryBoy = await DeliveryBoy.findById(req.user.id).select('+avatar');
+    if (!deliveryBoy) throw new ApiError(404, 'Delivery boy not found.');
+
+    // Cleanup old avatar if exists
+    if (deliveryBoy.avatar && deliveryBoy.avatar.startsWith('/uploads/')) {
+        await cleanupLocalFiles([path.join(process.cwd(), deliveryBoy.avatar)]);
+    }
+
+    const avatarPath = `/uploads/delivery-avatars/${req.file.filename}`;
+    deliveryBoy.avatar = avatarPath;
+    await deliveryBoy.save();
+
+    res.status(200).json(new ApiResponse(200, { avatar: avatarPath }, 'Avatar updated.'));
 });

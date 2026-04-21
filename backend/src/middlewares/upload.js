@@ -19,8 +19,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TMP_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/tmp');
 const DELIVERY_DOCS_DIR = path.resolve(__dirname, '../../uploads/delivery-docs');
+const DELIVERY_AVATARS_DIR = path.resolve(__dirname, '../../uploads/delivery-avatars');
 fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(DELIVERY_DOCS_DIR, { recursive: true });
+fs.mkdirSync(DELIVERY_AVATARS_DIR, { recursive: true });
 
 const imageDiskStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -49,6 +51,16 @@ const deliveryDocumentStorage = multer.diskStorage({
             .slice(0, 60);
         const ext = path.extname(file.originalname || '').toLowerCase();
         cb(null, `${Date.now()}-${safeBaseName}${ext}`);
+    }
+});
+
+const deliveryAvatarStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, DELIVERY_AVATARS_DIR);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+        cb(null, `${req.user?.id || Date.now()}-avatar${ext}`);
     }
 });
 
@@ -107,6 +119,12 @@ export const uploadDeliveryDocuments = (fields) =>
         },
         limits: { fileSize: MAX_DOCUMENT_FILE_SIZE },
     }).fields(fields);
+
+export const uploadDeliveryAvatar = multer({
+    storage: deliveryAvatarStorage,
+    fileFilter,
+    limits: { fileSize: 2 * 1024 * 1024 } // 2MB for avatar
+}).single('avatar');
 
 // CSV upload for bulk operations
 export const uploadCSV = multer({

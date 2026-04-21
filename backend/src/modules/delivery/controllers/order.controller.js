@@ -449,3 +449,73 @@ export const getDeliveryOtpForDebug = asyncHandler(async (req, res) => {
         expiresAt: order.deliveryOtpExpiry,
     }, 'Debug OTP fetched.'));
 });
+
+/**
+ * @desc    Get earnings and delivery statistics for the delivery boy
+ * @route   GET /api/delivery/orders/earnings
+ * @access  Private (Delivery Boy)
+ */
+export const getEarnings = asyncHandler(async (req, res) => {
+    const deliveryBoyId = req.user.id;
+    const { period = 'all' } = req.query;
+
+    const filter = {
+        deliveryBoyId: new mongoose.Types.ObjectId(deliveryBoyId),
+        status: 'delivered',
+        isDeleted: { $ne: true },
+    };
+
+    const now = new Date();
+    if (period === 'today') {
+        filter.deliveredAt = { $gte: new Date(now.setHours(0, 0, 0, 0)) };
+    } else if (period === 'week') {
+        const lastWeek = new Date(now.setDate(now.getDate() - 7));
+        filter.deliveredAt = { $gte: lastWeek };
+    } else if (period === 'month') {
+        const lastMonth = new Date(now.setMonth(now.getMonth() - 1));
+        filter.deliveredAt = { $gte: lastMonth };
+    }
+
+    const stats = await Order.aggregate([
+        { $match: filter },
+        {
+            $group: {
+                _id: null,
+                totalDeliveries: { $sum: 1 },
+                totalEarnings: { $sum: { $ifNull: ['$shipping', 0] } },
+                pendingCash: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $in: ['$paymentMethod', ['cod', 'cash']] },
+                                    { $ne: ['$isCashSettled', true] }
+                                ]
+                            },
+                            '$total',
+                            0
+                        ]
+                    }
+                },
+                settledCash: {
+                    $sum: {
+                        $cond: [
+                            { $eq: ['$isCashSettled', true] },
+                            '$total',
+                            0
+                        ]
+                    }
+                },
+            }
+        }
+    ]);
+
+    const result = stats[0] || {
+        totalDeliveries: 0,
+        totalEarnings: 0,
+        pendingCash: 0,
+        settledCash: 0
+    };
+
+    res.status(200).json(new ApiResponse(200, result, 'Earnings fetched.'));
+});

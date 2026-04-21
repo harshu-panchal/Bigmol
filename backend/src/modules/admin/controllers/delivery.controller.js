@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import { Order } from '../../../models/Order.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
@@ -447,4 +448,104 @@ export const settleCash = asyncHandler(async (req, res) => {
             `Settled cash for ${result.modifiedCount} orders`
         )
     );
+});
+
+/**
+ * @desc    Assign an order to a delivery boy
+ * @route   POST /api/admin/delivery-boys/:id/assign-order
+ * @access  Private (Admin)
+ */
+export const assignOrder = asyncHandler(async (req, res) => {
+    const { orderId } = req.body;
+    const boyId = req.params.id;
+
+    if (!orderId) throw new ApiError(400, 'orderId is required.');
+
+    const boy = await DeliveryBoy.findById(boyId).select('name isActive applicationStatus status');
+    if (!boy) throw new ApiError(404, 'Delivery boy not found.');
+    if (!boy.isActive) throw new ApiError(400, 'Delivery boy is inactive.');
+    if (boy.applicationStatus !== 'approved') {
+        throw new ApiError(400, 'Delivery boy account is not approved.');
+    }
+    if (boy.status === 'offline') {
+        throw new ApiError(400, 'Delivery boy is offline.');
+    }
+
+    const filter = {
+        $or: [{ orderId: orderId }, { _id: mongoose.isValidObjectId(orderId) ? orderId : null }],
+        isDeleted: { $ne: true },
+    };
+    
+    const order = await Order.findOne(filter);
+    if (!order) throw new ApiError(404, 'Order not found.');
+
+    if (['cancelled', 'returned', 'delivered'].includes(String(order.status))) {
+        throw new ApiError(409, `Cannot assign delivery for ${order.status} order.`);
+    }
+
+    const previousBoyId = order.deliveryBoyId ? String(order.deliveryBoyId) : null;
+    const isReassigned = previousBoyId && previousBoyId !== String(boyId);
+
+    order.deliveryBoyId = boyId;
+    
+    // Auto-move to processing if it was pending
+    if (order.status === 'pending') {
+        order.status = 'processing';
+        order.vendorItems = (order.vendorItems || []).map((vi) => {
+            const current = String(vi?.status || 'pending');
+            if (current === 'cancelled' || current === 'delivered') return vi;
+            return { ...vi.toObject(), status: 'processing' };
+        });
+    }
+
+    await order.save();
+
+    // Notify delivery boy
+    await createNotification({
+        recipientId: boy._id,
+        recipientType: 'delivery',
+        title: isReassigned ? 'Order reassigned' : 'New order assigned',
+        message: `${order.orderId} has been ${isReassigned ? 'reassigned to you' : 'assigned to you'}.`,
+        type: 'order',
+        data: {
+            orderId: String(order.orderId || order._id),
+            reassigned: isReassigned ? 'true' : 'false',
+        },
+    });
+
+    res.status(200).json(new ApiResponse(200, order, 'Order assigned to delivery partner.'));
+});
+
+/**
+ * @desc    Unassign an order from a delivery boy
+ * @route   DELETE /api/admin/delivery-boys/:id/unassign-order/:orderId
+ * @access  Private (Admin)
+ */
+export const unassignOrder = asyncHandler(async (req, res) => {
+    const { id: boyId, orderId } = req.params;
+
+    const filter = {
+        $or: [{ orderId: orderId }, { _id: mongoose.isValidObjectId(orderId) ? orderId : null }],
+        deliveryBoyId: boyId,
+        isDeleted: { $ne: true },
+    };
+
+    const order = await Order.findOne(filter);
+    if (!order) throw new ApiError(404, 'Assigned order not found.');
+
+    order.deliveryBoyId = undefined;
+    await order.save();
+
+    await createNotification({
+        recipientId: boyId,
+        recipientType: 'delivery',
+        title: 'Order unassigned',
+        message: `Order ${order.orderId} has been unassigned from you.`,
+        type: 'order',
+        data: {
+            orderId: String(order.orderId || order._id),
+        },
+    });
+
+    res.status(200).json(new ApiResponse(200, null, 'Order unassigned successfully.'));
 });

@@ -903,3 +903,54 @@ export const getUserReturnRequestById = asyncHandler(async (req, res) => {
     if (!request) throw new ApiError(404, 'Return request not found.');
     res.status(200).json(new ApiResponse(200, normalizeReturnRequest(request), 'Return request fetched.'));
 });
+
+/**
+ * @desc    Rate the delivery partner for an order
+ * @route   POST /api/user/orders/:id/rate-delivery
+ * @access  Private (Customer)
+ */
+export const rateDeliveryBoy = asyncHandler(async (req, res) => {
+    const { rating, comment = '' } = req.body;
+    const orderId = req.params.id;
+
+    if (!rating || rating < 1 || rating > 5) {
+        throw new ApiError(400, 'Rating must be between 1 and 5.');
+    }
+
+    const order = await Order.findOne({
+        $or: [{ orderId: orderId }, { _id: mongoose.isValidObjectId(orderId) ? orderId : null }],
+        userId: req.user.id
+    });
+
+    if (!order) throw new ApiError(404, 'Order not found.');
+    if (order.status !== 'delivered') {
+        throw new ApiError(400, 'Can only rate delivery for delivered orders.');
+    }
+    if (!order.deliveryBoyId) {
+        throw new ApiError(400, 'No delivery partner assigned to this order.');
+    }
+    if (order.deliveryRating?.rating) {
+        throw new ApiError(400, 'You have already rated the delivery for this order.');
+    }
+
+    const boy = await DeliveryBoy.findById(order.deliveryBoyId);
+    if (!boy) throw new ApiError(404, 'Delivery partner not found.');
+
+    const currentRating = boy.rating || 0;
+    const totalDeliveries = boy.totalDeliveries || 0;
+
+    // Rolling average calculation
+    const newRating = ((currentRating * totalDeliveries) + rating) / (totalDeliveries + 1);
+
+    boy.rating = Number(newRating.toFixed(2));
+    await boy.save();
+
+    order.deliveryRating = {
+        rating,
+        comment,
+        ratedAt: new Date()
+    };
+    await order.save();
+
+    res.status(200).json(new ApiResponse(200, { rating: boy.rating }, 'Delivery partner rated successfully.'));
+});
