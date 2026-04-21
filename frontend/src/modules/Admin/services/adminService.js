@@ -16,8 +16,8 @@ export const getAdminProfile = () =>
     api.get('/admin/auth/profile');
 
 // ─── Analytics / Dashboard ────────────────────────────────────────────────────
-export const getDashboardStats = () =>
-    api.get('/admin/analytics/dashboard');
+export const getDashboardStats = (period = 'month') =>
+    api.get('/admin/analytics/dashboard', { params: { period } });
 
 export const getRevenueData = (period = 'monthly', params = {}) =>
     api.get('/admin/analytics/revenue', { params: { period, ...params } });
@@ -40,6 +40,15 @@ export const getSalesData = (period = 'monthly', params = {}) =>
 export const getFinancialSummary = (period = 'monthly', params = {}) =>
     api.get('/admin/analytics/finance-summary', { params: { period, ...params } });
 
+export const getProfitLoss = (period = 'monthly', params = {}) =>
+    api.get('/admin/analytics/profit-loss', { params: { period, ...params } });
+
+export const getOrderTrends = (period = 'daily', params = {}) =>
+    api.get('/admin/analytics/order-trends', { params: { period, ...params } });
+
+export const getPaymentBreakdown = () =>
+    api.get('/admin/analytics/payment-breakdown');
+
 export const getInventoryStats = () =>
     api.get('/admin/analytics/inventory-stats');
 
@@ -53,11 +62,17 @@ export const getOrderById = (id) =>
 export const updateOrderStatus = (id, status) =>
     api.patch(`/admin/orders/${id}/status`, { status });
 
+export const bulkUpdateOrderStatus = (orderIds, status) =>
+    api.patch('/admin/orders/bulk-status', { orderIds, status });
+
 export const assignDeliveryBoy = (id, deliveryBoyId) =>
     api.patch(`/admin/orders/${id}/assign-delivery`, { deliveryBoyId });
 
 export const deleteOrder = (id) =>
     api.delete(`/admin/orders/${id}`);
+
+export const bulkDeleteOrders = (orderIds) =>
+    api.delete('/admin/orders/bulk-delete', { data: { orderIds } });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const getAllProducts = (params = {}) =>

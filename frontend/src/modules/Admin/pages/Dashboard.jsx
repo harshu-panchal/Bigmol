@@ -33,6 +33,9 @@ const Dashboard = () => {
     totalCustomers: 0,
     totalVendors: 0,
     pendingOrders: 0,
+    revenueChange: 0,
+    ordersChange: 0,
+    customersChange: 0,
   });
   const [revenueData, setRevenueData] = useState([]);
 
@@ -95,7 +98,7 @@ const Dashboard = () => {
         customerGrowthRes,
         recentOrdersRes,
       ] = await Promise.allSettled([
-        getDashboardStats(),
+        getDashboardStats(period),
         getRevenueData(apiPeriod),
         getOrderStatusBreakdown(),
         getTopProducts(),
@@ -112,6 +115,9 @@ const Dashboard = () => {
           totalCustomers: d.totalUsers || 0,
           totalVendors: d.totalVendors || 0,
           pendingOrders: d.pendingOrders || 0,
+          revenueChange: d.revenueChange || 0,
+          ordersChange: d.ordersChange || 0,
+          customersChange: d.customersChange || 0,
         });
       } else {
         setStats({

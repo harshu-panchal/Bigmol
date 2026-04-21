@@ -1,30 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiSave, FiFileText } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import * as adminService from '../../services/adminService';
 
 const TermsConditions = () => {
-  const [content, setContent] = useState(`Terms & Conditions
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-Last updated: ${new Date().toLocaleDateString()}
+  useEffect(() => {
+    const fetchPolicy = async () => {
+      setLoading(true);
+      try {
+        const response = await adminService.getPolicy('terms-conditions');
+        setContent(response.data?.content || '');
+      } catch (error) {
+        console.error(error);
+        toast.error('Failed to load terms and conditions');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPolicy();
+  }, []);
 
-1. Acceptance of Terms
-By accessing and using this website, you accept and agree to be bound by the terms and provision of this agreement.
-
-2. Use License
-Permission is granted to temporarily download one copy of the materials on our website for personal, non-commercial transitory viewing only.
-
-3. Disclaimer
-The materials on our website are provided on an 'as is' basis. We make no warranties, expressed or implied.
-
-4. Limitations
-In no event shall our company or its suppliers be liable for any damages arising out of the use or inability to use the materials on our website.
-
-5. Revisions
-We may revise these terms of service at any time without notice. By using this website you are agreeing to be bound by the then current version of these terms.`);
-
-  const handleSave = () => {
-    toast.success('Terms & conditions saved successfully');
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await adminService.updatePolicy('terms-conditions', content);
+      toast.success('Terms and conditions saved successfully');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save terms and conditions');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -40,10 +51,15 @@ We may revise these terms of service at any time without notice. By using this w
         </div>
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-4 py-2 gradient-green text-white rounded-lg hover:shadow-glow-green transition-all font-semibold text-sm"
+          disabled={saving || loading}
+          className="flex items-center gap-2 px-4 py-2 gradient-green text-white rounded-lg hover:shadow-glow-green transition-all font-semibold text-sm disabled:opacity-50"
         >
-          <FiSave />
-          <span>Save Policy</span>
+          {saving ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          ) : (
+            <FiSave />
+          )}
+          <span>{saving ? 'Saving...' : 'Save Policy'}</span>
         </button>
       </div>
 
@@ -52,16 +68,22 @@ We may revise these terms of service at any time without notice. By using this w
           <FiFileText className="text-primary-600" />
           <h3 className="font-semibold text-gray-800">Terms & Conditions Content</h3>
         </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={20}
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
-        />
+        {loading ? (
+          <div className="flex justify-center p-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          </div>
+        ) : (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={20}
+            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+            placeholder="Enter terms and conditions content..."
+          />
+        )}
       </div>
     </motion.div>
   );
 };
 
 export default TermsConditions;
-

@@ -27,7 +27,7 @@ import ConfirmModal from "../../components/ConfirmModal";
 import AnimatedSelect from "../../components/AnimatedSelect";
 import { formatPrice } from "../../../../shared/utils/helpers";
 import { formatCurrency, formatDateTime } from "../../utils/adminHelpers";
-import { getAllOrders, deleteOrder } from "../../services/adminService";
+import { getAllOrders, deleteOrder, bulkUpdateOrderStatus, bulkDeleteOrders } from "../../services/adminService";
 import toast from "react-hot-toast";
 
 // OrderItemsDropdown component
@@ -384,7 +384,10 @@ const AllOrders = () => {
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     orderId: null,
+    isBulk: false
   });
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [bulkStatusLoading, setBulkStatusLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -556,13 +559,42 @@ const AllOrders = () => {
 
   const confirmDeleteOrder = async () => {
     try {
-      await deleteOrder(deleteModal.orderId);
-      const updatedOrders = orders.filter((o) => o.id !== deleteModal.orderId);
-      setOrders(updatedOrders);
-      setDeleteModal({ isOpen: false, orderId: null });
-      toast.success("Order deleted successfully");
+      if (deleteModal.isBulk) {
+        await bulkDeleteOrders(selectedOrderIds);
+        const updatedOrders = orders.filter((o) => !selectedOrderIds.includes(o.id));
+        setOrders(updatedOrders);
+        setSelectedOrderIds([]);
+        toast.success("Selected orders deleted successfully");
+      } else {
+        await deleteOrder(deleteModal.orderId);
+        const updatedOrders = orders.filter((o) => o.id !== deleteModal.orderId);
+        setOrders(updatedOrders);
+        toast.success("Order deleted successfully");
+      }
+      setDeleteModal({ isOpen: false, orderId: null, isBulk: false });
     } catch (error) {
       console.error("Delete failed:", error);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status) => {
+    if (!status) return;
+    setBulkStatusLoading(true);
+    try {
+      const response = await bulkUpdateOrderStatus(selectedOrderIds, status);
+      const { success, failed } = response.data;
+      
+      toast.success(`Updated ${success.length} orders successfully`);
+      if (failed.length > 0) {
+        toast.error(`${failed.length} orders failed to update. Check transitions.`);
+      }
+      
+      fetchOrders();
+      setSelectedOrderIds([]);
+    } catch (error) {
+      console.error("Bulk status update failed:", error);
+    } finally {
+      setBulkStatusLoading(false);
     }
   };
 
@@ -886,8 +918,73 @@ const AllOrders = () => {
           columns={columns}
           pagination={true}
           itemsPerPage={10}
+          selectable={true}
+          selectedIds={selectedOrderIds}
+          onSelectionChange={setSelectedOrderIds}
+          uniqueKey="id"
         />
       )}
+
+      {/* Floating Bulk Action Bar */}
+      <AnimatePresence>
+        {selectedOrderIds.length > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-[5000] w-[90%] max-w-4xl"
+          >
+            <div className="bg-gray-900 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="bg-primary-600 px-3 py-1 rounded-full text-xs font-bold">
+                  {selectedOrderIds.length}
+                </span>
+                <span className="text-sm font-medium hidden sm:inline">Orders Selected</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative group">
+                  <AnimatedSelect
+                    value=""
+                    onChange={(e) => handleBulkStatusUpdate(e.target.value)}
+                    options={[
+                      { value: "", label: "Update Status" },
+                      { value: "processing", label: "Mark as Processing" },
+                      { value: "shipped", label: "Mark as Shipped" },
+                      { value: "delivered", label: "Mark as Delivered" },
+                      { value: "cancelled", label: "Cancel Orders" },
+                    ]}
+                    className="!bg-gray-800 !text-white !border-gray-700 !py-1 text-sm min-w-[150px]"
+                    disabled={bulkStatusLoading}
+                  />
+                  {bulkStatusLoading && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <FiRefreshCw className="animate-spin text-primary-500" />
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setDeleteModal({ isOpen: true, isBulk: true })}
+                  className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                  title="Bulk Delete"
+                >
+                  <FiTrash2 />
+                </button>
+
+                <div className="w-px h-6 bg-gray-700 mx-1"></div>
+
+                <button
+                  onClick={() => setSelectedOrderIds([])}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <FiX />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}

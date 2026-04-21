@@ -6,6 +6,9 @@ export const useAnalyticsStore = create((set, get) => ({
     dashboardStats: null,
     revenueData: [],
     financialSummary: [],
+    profitLossData: [],
+    orderTrendsData: [],
+    paymentBreakdownData: null,
     inventoryStats: null,
     isLoading: false,
     error: null,
@@ -48,6 +51,39 @@ export const useAnalyticsStore = create((set, get) => ({
             set({ revenueData: response.data, isLoading: false });
         } catch (error) {
             set({ error: error.message, isLoading: false });
+        }
+    },
+
+    fetchProfitLoss: async (period = 'monthly', params = {}) => {
+        set({ isLoading: true });
+        try {
+            const response = await adminService.getProfitLoss(period, params);
+            set({ profitLossData: response.data, isLoading: false });
+        } catch (error) {
+            set({ error: error.message, isLoading: false });
+            toast.error('Failed to fetch profit and loss data');
+        }
+    },
+
+    fetchOrderTrends: async (period = 'daily', params = {}) => {
+        set({ isLoading: true });
+        try {
+            const response = await adminService.getOrderTrends(period, params);
+            set({ orderTrendsData: response.data, isLoading: false });
+        } catch (error) {
+            set({ error: error.message, isLoading: false });
+            toast.error('Failed to fetch order trends');
+        }
+    },
+
+    fetchPaymentBreakdown: async () => {
+        set({ isLoading: true });
+        try {
+            const response = await adminService.getPaymentBreakdown();
+            set({ paymentBreakdownData: response.data, isLoading: false });
+        } catch (error) {
+            set({ error: error.message, isLoading: false });
+            toast.error('Failed to fetch payment breakdown');
         }
     }
 }));

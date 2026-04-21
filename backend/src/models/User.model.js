@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
         password: { type: String, required: true, select: false },
         phone: { type: String, trim: true },
         avatar: { type: String }, // Cloudinary URL
-        role: { type: String, enum: ['customer', 'delivery'], default: 'customer' },
+        role: { type: String, enum: ['customer', 'delivery'], default: 'customer', index: true },
         userType: { type: String, enum: ['retailer', 'wholesaler'], default: 'retailer' },
         isVerified: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },

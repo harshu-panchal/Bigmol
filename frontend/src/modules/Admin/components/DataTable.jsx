@@ -11,6 +11,10 @@ const DataTable = ({
   sortable = true,
   onRowClick,
   className = '',
+  selectable = false,
+  selectedIds = [],
+  onSelectionChange = () => {},
+  uniqueKey = 'id'
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -58,6 +62,24 @@ const DataTable = ({
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
+  const handleselectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = data.map(item => item[uniqueKey]);
+      onSelectionChange(allIds);
+    } else {
+      onSelectionChange([]);
+    }
+  };
+
+  const handleSelectRow = (e, rowId) => {
+    e.stopPropagation();
+    if (e.target.checked) {
+      onSelectionChange([...selectedIds, rowId]);
+    } else {
+      onSelectionChange(selectedIds.filter(id => id !== rowId));
+    }
+  };
+
   // Get primary columns (exclude actions for mobile card view)
   const primaryColumns = columns.filter(col => col.key !== 'actions');
   const actionsColumn = columns.find(col => col.key === 'actions');
@@ -72,53 +94,69 @@ const DataTable = ({
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {paginatedData.map((row, index) => (
-              <div
-                key={row.id || index}
-                onClick={() => onRowClick && onRowClick(row)}
-                className={`p-4 ${
-                  onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-                } transition-colors`}
-              >
-                <div className="space-y-2.5">
-                  {primaryColumns.map((column) => {
-                    const rawValue = row[column.key];
-                    const value = column.render
-                      ? column.render(rawValue, row)
-                      : rawValue;
-                    
-                    // Skip rendering if value is empty/null
-                    if (!value && value !== 0) return null;
-                    
-                    // Ensure value is renderable (not an object/array)
-                    let displayValue = value;
-                    if (typeof value === 'object' && value !== null && !React.isValidElement(value)) {
-                      if (Array.isArray(value)) {
-                        displayValue = `${value.length} items`;
-                      } else {
-                        displayValue = JSON.stringify(value);
-                      }
-                    }
-                    
-                    return (
-                      <div key={column.key} className="flex items-start gap-2">
-                        <span className="text-xs font-semibold text-gray-600 flex-shrink-0 min-w-[80px] sm:min-w-[100px]">
-                          {column.label}:
-                        </span>
-                        <span className="text-sm text-gray-800 break-words flex-1">
-                          {displayValue}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {actionsColumn && (
-                    <div className="pt-2 border-t border-gray-100 mt-3">
-                      {actionsColumn.render(null, row)}
+            {paginatedData.map((row, index) => {
+              const rowId = row[uniqueKey] || index;
+              const isSelected = selectedIds.includes(rowId);
+              
+              return (
+                <div
+                  key={rowId}
+                  onClick={() => onRowClick && onRowClick(row)}
+                  className={`p-4 ${
+                    onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
+                  } ${isSelected ? 'bg-primary-50' : ''} transition-colors`}
+                >
+                  <div className="flex items-start gap-4">
+                    {selectable && (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectRow(e, rowId)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer flex-shrink-0"
+                      />
+                    )}
+                    <div className="space-y-2.5 flex-1">
+                      {primaryColumns.map((column) => {
+                        const rawValue = row[column.key];
+                        const value = column.render
+                          ? column.render(rawValue, row)
+                          : rawValue;
+                        
+                        // Skip rendering if value is empty/null
+                        if (!value && value !== 0) return null;
+                        
+                        // Ensure value is renderable (not an object/array)
+                        let displayValue = value;
+                        if (typeof value === 'object' && value !== null && !React.isValidElement(value)) {
+                          if (Array.isArray(value)) {
+                            displayValue = `${value.length} items`;
+                          } else {
+                            displayValue = JSON.stringify(value);
+                          }
+                        }
+                        
+                        return (
+                          <div key={column.key} className="flex items-start gap-2">
+                            <span className="text-xs font-semibold text-gray-600 flex-shrink-0 min-w-[80px] sm:min-w-[100px]">
+                              {column.label}:
+                            </span>
+                            <span className="text-sm text-gray-800 break-words flex-1">
+                              {displayValue}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {actionsColumn && (
+                        <div className="pt-2 border-t border-gray-100 mt-3">
+                          {actionsColumn.render(null, row)}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -128,6 +166,16 @@ const DataTable = ({
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
+              {selectable && (
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-left w-10">
+                  <input
+                    type="checkbox"
+                    checked={data.length > 0 && selectedIds.length === data.length}
+                    onChange={handleselectAll}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                  />
+                </th>
+              )}
               {columns.map((column) => (
                 <th
                   key={column.key}
@@ -160,47 +208,63 @@ const DataTable = ({
             {paginatedData.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + (selectable ? 1 : 0)}
                   className="px-3 sm:px-6 py-8 sm:py-12 text-center text-gray-500"
                 >
                   No data available
                 </td>
               </tr>
             ) : (
-              paginatedData.map((row, index) => (
-                <tr
-                  key={row.id || index}
-                  onClick={() => onRowClick && onRowClick(row)}
-                  className={`${
-                    onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-                  } transition-colors`}
-                >
-                  {columns.map((column) => {
-                    const rawValue = row[column.key];
-                    let displayValue = column.render
-                      ? column.render(rawValue, row)
-                      : rawValue;
-                    
-                    // Ensure value is renderable (not an object/array)
-                    if (typeof displayValue === 'object' && displayValue !== null && !React.isValidElement(displayValue)) {
-                      if (Array.isArray(displayValue)) {
-                        displayValue = `${displayValue.length} items`;
-                      } else {
-                        displayValue = JSON.stringify(displayValue);
-                      }
-                    }
-                    
-                    return (
-                      <td
-                        key={column.key}
-                        className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700"
-                      >
-                        {displayValue}
+              paginatedData.map((row, index) => {
+                const rowId = row[uniqueKey] || index;
+                const isSelected = selectedIds.includes(rowId);
+                
+                return (
+                  <tr
+                    key={rowId}
+                    onClick={() => onRowClick && onRowClick(row)}
+                    className={`${
+                      onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
+                    } ${isSelected ? 'bg-primary-50/50' : ''} transition-colors`}
+                  >
+                    {selectable && (
+                      <td className="px-3 sm:px-6 py-3 sm:py-4">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(e, rowId)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                        />
                       </td>
-                    );
-                  })}
-                </tr>
-              ))
+                    )}
+                    {columns.map((column) => {
+                      const rawValue = row[column.key];
+                      let displayValue = column.render
+                        ? column.render(rawValue, row)
+                        : rawValue;
+                      
+                      // Ensure value is renderable (not an object/array)
+                      if (typeof displayValue === 'object' && displayValue !== null && !React.isValidElement(displayValue)) {
+                        if (Array.isArray(displayValue)) {
+                          displayValue = `${displayValue.length} items`;
+                        } else {
+                          displayValue = JSON.stringify(displayValue);
+                        }
+                      }
+                      
+                      return (
+                        <td
+                          key={column.key}
+                          className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700"
+                        >
+                          {displayValue}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -264,4 +328,3 @@ const DataTable = ({
 };
 
 export default DataTable;
-

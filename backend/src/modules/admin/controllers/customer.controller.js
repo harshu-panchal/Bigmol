@@ -273,7 +273,7 @@ export const getCustomerOrders = asyncHandler(async (req, res) => {
  * @access  Private (Admin)
  */
 export const getCustomerTransactions = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 20, search, status = 'all' } = req.query;
+    const { page = 1, limit = 20, search, status = 'all', paymentMethod, startDate, endDate } = req.query;
     const numericPage = Number(page) || 1;
     const numericLimit = Number(limit) || 20;
     const skip = (numericPage - 1) * numericLimit;
@@ -282,6 +282,16 @@ export const getCustomerTransactions = asyncHandler(async (req, res) => {
         userId: { $ne: null },
         isDeleted: { $ne: true },
     };
+
+    if (paymentMethod && paymentMethod !== 'all') {
+        filter.paymentMethod = paymentMethod;
+    }
+
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) filter.createdAt.$gte = new Date(startDate);
+        if (endDate) filter.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+    }
 
     if (status === 'completed') {
         filter.$or = [{ paymentStatus: 'paid' }, { paymentStatus: 'refunded' }];

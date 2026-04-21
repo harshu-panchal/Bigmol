@@ -100,10 +100,17 @@ const Reviews = () => {
             <>
               <button
                 onClick={() => handleApprove(row.id)}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-green-100"
                 title="Approve"
               >
                 <FiCheck />
+              </button>
+              <button
+                onClick={() => handleReject(row.id)}
+                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-orange-100"
+                title="Reject / Keep Pending"
+              >
+                <FiX />
               </button>
             </>
           )}
