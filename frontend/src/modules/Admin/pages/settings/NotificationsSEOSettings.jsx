@@ -55,12 +55,17 @@ const NotificationsSEOSettings = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    updateSettings("email", emailData);
-    updateSettings("notifications", notificationsData);
-    updateSettings("seo", seoData);
-    toast.success("Settings saved successfully");
+    try {
+      await Promise.all([
+        updateSettings("email", emailData),
+        updateSettings("notifications", notificationsData),
+        updateSettings("seo", seoData)
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [

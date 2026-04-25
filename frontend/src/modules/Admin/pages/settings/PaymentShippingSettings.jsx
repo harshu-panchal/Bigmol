@@ -67,11 +67,16 @@ const PaymentShippingSettings = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    updateSettings('payment', paymentData);
-    updateSettings('shipping', shippingData);
-    toast.success('Settings saved successfully');
+    try {
+      await Promise.all([
+        updateSettings('payment', paymentData),
+        updateSettings('shipping', shippingData)
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [

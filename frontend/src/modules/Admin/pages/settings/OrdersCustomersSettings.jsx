@@ -52,11 +52,16 @@ const OrdersCustomersSettings = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    updateSettings('orders', ordersData);
-    updateSettings('customers', customersData);
-    toast.success('Settings saved successfully');
+    try {
+      await Promise.all([
+        updateSettings('orders', ordersData),
+        updateSettings('customers', customersData)
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [

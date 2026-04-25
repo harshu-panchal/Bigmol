@@ -14,6 +14,8 @@ import * as marketingController from '../controllers/marketing.controller.js';
 import * as notificationController from '../controllers/notification.controller.js';
 import * as uploadController from '../controllers/upload.controller.js';
 import * as policyController from '../controllers/policy.controller.js';
+import * as settingController from '../controllers/setting.controller.js';
+
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
 import { authLimiter } from '../../../middlewares/rateLimiter.js';
@@ -193,6 +195,11 @@ router.delete('/marketing/campaigns/:id', ...adminAuth, validate(marketingIdPara
 // ─── Reports ──────────────────────────────────────────────────────────────────
 router.get('/reports/sales', ...adminAuth, reportController.getSalesReport);
 router.get('/reports/inventory', ...adminAuth, reportController.getInventoryReport);
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+router.get('/settings', ...adminAuth, settingController.getSettings);
+router.put('/settings', ...adminAuth, settingController.updateSettings);
+
 
 // ─── Notifications ─────────────────────────────────────────────────────────────
 router.get('/notifications', ...adminAuth, notificationController.getAdminNotifications);

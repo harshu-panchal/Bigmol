@@ -42,11 +42,16 @@ const ProductsInventorySettings = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    updateSettings('products', productsData);
-    updateSettings('tax', taxData);
-    toast.success('Settings saved successfully');
+    try {
+      await Promise.all([
+        updateSettings('products', productsData),
+        updateSettings('tax', taxData)
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [

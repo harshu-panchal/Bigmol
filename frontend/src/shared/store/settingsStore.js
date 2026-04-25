@@ -184,21 +184,28 @@ export const useSettingsStore = create((set, get) => ({
   updateSettings: async (category, settingsData) => {
     set({ isLoading: true });
     try {
-      const currentSettings = get().settings;
-      const updatedSettings = {
-        ...currentSettings,
-        [category]: {
-          ...currentSettings[category],
-          ...settingsData,
-        },
-      };
-
-      // Persist to backend
-      await adminService.updateSettings(updatedSettings);
+      // Persist to backend ONLY the category being updated
+      await adminService.updateSettings({
+        [category]: settingsData
+      });
       
-      set({ settings: updatedSettings, isLoading: false });
+      let finalSettings;
+      // Use functional state update to prevent race conditions on parallel calls
+      set((state) => {
+        const currentCategoryData = state.settings[category] || {};
+        const updatedSettings = {
+          ...state.settings,
+          [category]: {
+            ...currentCategoryData,
+            ...settingsData,
+          },
+        };
+        finalSettings = updatedSettings;
+        return { settings: updatedSettings, isLoading: false };
+      });
+
       toast.success("Settings updated on server successfully");
-      return updatedSettings;
+      return finalSettings;
     } catch (error) {
       set({ isLoading: false });
       toast.error("Failed to save settings to server");

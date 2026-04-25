@@ -78,13 +78,18 @@ const ContentFeaturesSettings = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    updateSettings('content', contentData);
-    updateSettings('features', featuresData);
-    updateSettings('homepage', homepageData);
-    updateSettings('reviews', reviewsData);
-    toast.success('Settings saved successfully');
+    try {
+      await Promise.all([
+        updateSettings('content', contentData),
+        updateSettings('features', featuresData),
+        updateSettings('homepage', homepageData),
+        updateSettings('reviews', reviewsData)
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [
