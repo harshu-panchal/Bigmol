@@ -24,8 +24,10 @@ import {
 } from "../data/catalogData";
 import PageTransition from "../../../shared/components/PageTransition";
 import usePullToRefresh from "../hooks/usePullToRefresh";
+import { useProducts, useVendors, useBrands, useBanners } from "../../../shared/hooks/useCatalog";
 import toast from "react-hot-toast";
 import api from "../../../shared/utils/api";
+
 import heroSlide1 from "../../../../data/hero/slide1.png";
 import heroSlide2 from "../../../../data/hero/slide2.png";
 import heroSlide3 from "../../../../data/hero/slide3.png";
@@ -190,12 +192,78 @@ const MobileHome = () => {
   const [dragOffset, setDragOffset] = useState(0);
   const [autoSlidePaused, setAutoSlidePaused] = useState(false);
   const [isDraggingSlide, setIsDraggingSlide] = useState(false);
-  const [slides, setSlides] = useState(DEFAULT_HERO_SLIDES);
-  const [promoBanners, setPromoBanners] = useState([]);
-  const [sideBanner, setSideBanner] = useState(null);
-  const [catalogProducts, setCatalogProducts] = useState([]);
-  const [homeVendors, setHomeVendors] = useState([]);
-  const [homeBrands, setHomeBrands] = useState([]);
+  const { data: productsData, refetch: refetchProducts } = useProducts({ page: 1, limit: 120 });
+  const { data: vendorsData, refetch: refetchVendors } = useVendors({ status: "approved", page: 1, limit: 50 });
+  const { data: brandsData, refetch: refetchBrands } = useBrands();
+  const { data: bannersData, refetch: refetchBanners } = useBanners();
+
+  const catalogProducts = useMemo(() => {
+    const productsSource = asList(extractResponseData(productsData)?.products);
+    return productsSource
+      .map(normalizeProduct)
+      .filter((product) => product.id && product.isActive !== false);
+  }, [productsData]);
+
+  const homeVendors = useMemo(() => {
+    const vendorsSource = asList(extractResponseData(vendorsData)?.vendors);
+    return vendorsSource
+      .map(normalizeVendor)
+      .filter((vendor) => vendor.id);
+  }, [vendorsData]);
+
+  const homeBrands = useMemo(() => {
+    const brandsSource = asList(extractResponseData(brandsData));
+    return brandsSource
+      .map(normalizeBrand)
+      .filter((brand) => brand.id);
+  }, [brandsData]);
+
+  const { slides, promoBanners, sideBanner } = useMemo(() => {
+    const allBanners = asList(extractResponseData(bannersData)).filter(
+      (banner) => banner?.image && banner?.isActive !== false
+    );
+
+    const bannerSlides = allBanners
+      .filter((banner) => ["home_slider", "hero"].includes(String(banner?.type || "")))
+      .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
+      .map((banner, index) => ({
+        id: normalizeId(banner._id || banner.id || `home-slide-${index}`),
+        image: banner.image,
+        link: resolveBannerLink(banner),
+        title: banner.title || "",
+      }));
+
+    const promos = allBanners
+      .filter((banner) => String(banner?.type || "") === "promotional")
+      .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
+      .map((banner, index) => ({
+        id: normalizeId(banner._id || banner.id || `promo-banner-${index}`),
+        title: banner.title || "Special Offer",
+        subtitle: banner.subtitle || "Limited Time",
+        description: banner.description || "",
+        discount: banner.description || "Shop Now",
+        link: resolveBannerLink(banner),
+        image: banner.image,
+        type: banner.type || "promotional",
+      }));
+
+    const side = allBanners
+      .filter((banner) => String(banner?.type || "") === "side_banner")
+      .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
+      .map((banner, index) => ({
+        id: normalizeId(banner._id || banner.id || `side-banner-${index}`),
+        image: banner.image,
+        title: banner.title || "PREMIUM",
+        subtitle: banner.subtitle || "Exclusive Collection",
+        link: resolveBannerLink(banner),
+      }));
+
+    return {
+      slides: bannerSlides.length > 0 ? bannerSlides : DEFAULT_HERO_SLIDES,
+      promoBanners: promos,
+      sideBanner: side[0] || null,
+    };
+  }, [bannersData]);
 
   const fallbackMostPopular = getMostPopular();
   const fallbackTrending = getTrending();
@@ -263,219 +331,21 @@ const MobileHome = () => {
     return homeBrands.slice(0, 10);
   }, [homeBrands, fallbackBrands]);
 
-  const fetchHomeData = useCallback(async () => {
-    try {
-      const [productsRes, vendorsRes, brandsRes, bannersRes] =
-        await Promise.allSettled([
-          api.get("/products", { params: { page: 1, limit: 120 } }),
-          api.get("/vendors/all", {
-            params: { status: "approved", page: 1, limit: 50 },
-          }),
-          api.get("/brands/all"),
-          api.get("/banners"),
-        ]);
 
-      if (productsRes.status === "fulfilled") {
-        const payload = extractResponseData(productsRes.value);
-        const productsSource = asList(payload?.products);
-        const normalizedProducts = productsSource
-          .map(normalizeProduct)
-          .filter((product) => product.id && product.isActive !== false);
-        setCatalogProducts(normalizedProducts);
-      }
-
-      if (vendorsRes.status === "fulfilled") {
-        const payload = extractResponseData(vendorsRes.value);
-        const vendorsSource = asList(payload?.vendors);
-        setHomeVendors(
-          vendorsSource
-            .map(normalizeVendor)
-            .filter((vendor) => vendor.id)
-        );
-      }
-
-      if (brandsRes.status === "fulfilled") {
-        const payload = extractResponseData(brandsRes.value);
-        const brandsSource = asList(payload);
-        setHomeBrands(
-          brandsSource
-            .map(normalizeBrand)
-            .filter((brand) => brand.id)
-        );
-      }
-
-      if (bannersRes.status === "fulfilled") {
-        const payload = extractResponseData(bannersRes.value);
-        const allBanners = asList(payload).filter(
-          (banner) => banner?.image && banner?.isActive !== false
-        );
-
-        const bannerSlides = allBanners
-          .filter((banner) =>
-            ["home_slider", "hero"].includes(String(banner?.type || ""))
-          )
-          .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
-          .map((banner, index) => ({
-            id: normalizeId(banner._id || banner.id || `home-slide-${index}`),
-            image: banner.image,
-            link: resolveBannerLink(banner),
-            title: banner.title || "",
-          }));
-        setSlides(bannerSlides.length > 0 ? bannerSlides : DEFAULT_HERO_SLIDES);
-
-        const banners = allBanners
-          .filter((banner) => String(banner?.type || "") === "promotional")
-          .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
-          .map((banner, index) => ({
-            id: normalizeId(banner._id || banner.id || `promo-banner-${index}`),
-            title: banner.title || "Special Offer",
-            subtitle: banner.subtitle || "Limited Time",
-            description: banner.description || "",
-            discount: banner.description || "Shop Now",
-            link: resolveBannerLink(banner),
-            image: banner.image,
-            type: banner.type || "promotional",
-          }));
-        setPromoBanners(banners);
-
-        const mapped = allBanners
-          .filter((banner) => String(banner?.type || "") === "side_banner")
-          .sort((a, b) => toNumber(a.order, 0) - toNumber(b.order, 0))
-          .map((banner, index) => ({
-            id: normalizeId(banner._id || banner.id || `side-banner-${index}`),
-            image: banner.image,
-            title: banner.title || "PREMIUM",
-            subtitle: banner.subtitle || "Exclusive Collection",
-            link: resolveBannerLink(banner),
-          }));
-        setSideBanner(mapped[0] || null);
-      } else {
-        setSlides(DEFAULT_HERO_SLIDES);
-        setPromoBanners([]);
-        setSideBanner(null);
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchHomeData();
-  }, [fetchHomeData]);
-
-  // Auto-slide functionality (pauses when user is dragging)
-  useEffect(() => {
-    if (autoSlidePaused) return;
-
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [slides.length, autoSlidePaused]);
-
-  // Minimum swipe distance (in pixels) to trigger slide change
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e) => {
-    e.stopPropagation(); // Prevent pull-to-refresh from interfering
-    setTouchEnd(null);
-    setIsDraggingSlide(false);
-    const touch = e.targetTouches[0];
-    setTouchStart(touch.clientX);
-    setDragOffset(0);
-    setAutoSlidePaused(true);
-  };
-
-  const onTouchMove = (e) => {
-    if (touchStart === null) return;
-    e.stopPropagation(); // Prevent pull-to-refresh from interfering
-    const touch = e.targetTouches[0];
-    const currentX = touch.clientX;
-    // Calculate difference: positive when swiping left, negative when swiping right
-    const diff = touchStart - currentX;
-    if (Math.abs(diff) > 8) {
-      setIsDraggingSlide(true);
-    }
-    // Constrain the drag offset to prevent over-dragging
-    // Use container width for better responsiveness
-    const containerWidth = e.currentTarget?.offsetWidth || 400;
-    const maxDrag = containerWidth * 0.5; // Maximum drag distance (50% of container)
-    // dragOffset: positive = swiping left (show next), negative = swiping right (show previous)
-    setDragOffset(Math.max(-maxDrag, Math.min(maxDrag, diff)));
-    setTouchEnd(currentX);
-  };
-
-  const onTouchEnd = (e) => {
-    if (e) e.stopPropagation(); // Prevent pull-to-refresh from interfering
-
-    if (touchStart === null) {
-      setAutoSlidePaused(false);
-      return;
-    }
-
-    // Calculate swipe distance: positive = left swipe, negative = right swipe
-    const distance = touchStart - (touchEnd || touchStart);
-    const isLeftSwipe = distance > minSwipeDistance; // Finger moved left = show next slide
-    const isRightSwipe = distance < -minSwipeDistance; // Finger moved right = show previous slide
-
-    if (isLeftSwipe) {
-      // Swipe left (finger moved left) - go to next slide (slide moves left)
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    } else if (isRightSwipe) {
-      // Swipe right (finger moved right) - go to previous slide (slide moves right)
-      setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-    }
-
-    // Reset touch state
-    setTouchStart(null);
-    setTouchEnd(null);
-    setDragOffset(0);
-
-    // Resume auto-slide after a short delay
-    setTimeout(() => {
-      setAutoSlidePaused(false);
-    }, 2000);
-    setTimeout(() => {
-      setIsDraggingSlide(false);
-    }, 150);
-  };
-
-  const handleSlideClick = (slide) => {
-    if (isDraggingSlide) return;
-    const target = String(slide?.link || "").trim();
-    if (!target) return;
-
-    if (isExternalLink(target)) {
-      window.open(target, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (isSafeInternalPath(target)) {
-      navigate(target);
-    }
-  };
-
-  const handleBannerNavigation = (target) => {
-    const normalizedTarget = String(target || "").trim();
-    if (!normalizedTarget) return;
-    if (isExternalLink(normalizedTarget)) {
-      window.open(normalizedTarget, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (isSafeInternalPath(normalizedTarget) && isKnownInternalRoute(normalizedTarget)) {
-      navigate(normalizedTarget);
-    }
-  };
-
-  // Pull to refresh handler
   const handleRefresh = async () => {
-    const ok = await fetchHomeData();
-    if (!ok) {
-      toast.error("Refresh failed. Showing available data.");
-      return;
+    try {
+      await Promise.all([
+        refetchProducts(),
+        refetchVendors(),
+        refetchBrands(),
+        refetchBanners(),
+      ]);
+      toast.success("Refreshed");
+    } catch (err) {
+      toast.error("Refresh failed");
     }
-    toast.success("Refreshed");
   };
+
 
   const {
     pullDistance,

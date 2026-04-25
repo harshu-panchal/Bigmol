@@ -14,6 +14,14 @@ export const verifyPayment = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Order not found for this payment');
     }
 
+    // Idempotency check: if order is already paid, return success
+    if (order.paymentStatus === 'paid' || order.paymentStatus === 'partially_paid') {
+        return res.status(200).json(
+            new ApiResponse(200, order, 'Payment already verified')
+        );
+    }
+
+
     // Verify signature
     const text = razorpay_order_id + "|" + razorpay_payment_id;
     const generated_signature = crypto

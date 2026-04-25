@@ -8,7 +8,8 @@ import * as notificationController from '../controllers/notification.controller.
 import * as paymentController from '../controllers/payment.controller.js';
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
-import { authLimiter, otpLimiter } from '../../../middlewares/rateLimiter.js';
+import { authLimiter, otpLimiter, paymentLimiter } from '../../../middlewares/rateLimiter.js';
+
 import { validate } from '../../../middlewares/validate.js';
 import { uploadSingle } from '../../../middlewares/upload.js';
 import {
@@ -76,7 +77,8 @@ router.get('/returns', ...customerAuth, orderController.getUserReturnRequests);
 router.get('/returns/:id', ...customerAuth, orderController.getUserReturnRequestById);
  
 // Payment routes
-router.post('/payments/verify', ...customerAuth, paymentController.verifyPayment);
+router.post('/payments/verify', ...customerAuth, paymentLimiter, paymentController.verifyPayment);
+
 
 
 // Notification routes (protected)
