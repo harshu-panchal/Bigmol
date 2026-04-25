@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FiSave, FiFileText } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import * as adminService from '../../services/adminService';
 
 const PrivacyPolicy = () => {
   const [content, setContent] = useState('');
