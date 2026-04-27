@@ -11,15 +11,17 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     // 1. Validate required fields
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error('[Payment Verification] Missing required fields:', {
-                razorpay_order_id: !!razorpay_order_id,
-                razorpay_payment_id: !!razorpay_payment_id,
-                razorpay_signature: !!razorpay_signature,
-                received_body: req.body
-            });
-        }
-        throw new ApiError(400, 'Missing payment fields');
+        const missing = [];
+        if (!razorpay_order_id) missing.push('razorpay_order_id');
+        if (!razorpay_payment_id) missing.push('razorpay_payment_id');
+        if (!razorpay_signature) missing.push('razorpay_signature');
+
+        console.error('[Payment Verification] Missing required fields:', {
+            missing,
+            received_body: req.body
+        });
+        
+        throw new ApiError(400, `Missing payment fields: ${missing.join(', ')}`);
     }
 
     // 2. Find order

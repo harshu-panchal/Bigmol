@@ -163,6 +163,11 @@ const MobileCheckout = () => {
         return;
       }
 
+      if (!order.razorpayOrderId && paymentMethod !== 'cod') {
+        console.error("RAZORPAY_ORDER_ID_MISSING:", order);
+        throw new Error("Failed to initialize payment gateway. Please try again.");
+      }
+
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: Math.round((order.downPaymentAmount || order.total) * 100),
@@ -177,13 +182,20 @@ const MobileCheckout = () => {
         },
         theme: { color: "#10b981" },
         handler: async (res) => {
+          console.log("RAZORPAY_RESPONSE:", res);
           try {
-            await api.post("/user/payments/verify", { ...res, orderId: order.orderId || order.id });
+            await api.post("/user/payments/verify", { 
+              razorpay_order_id: res.razorpay_order_id,
+              razorpay_payment_id: res.razorpay_payment_id,
+              razorpay_signature: res.razorpay_signature,
+              orderId: order.orderId || order.id 
+            });
             clearCart();
             toast.success("Payment Received!");
             navigate(`/order-confirmation/${order.orderId || order.id}`);
           } catch (err) {
-            toast.error("Verification failed");
+            console.error("VERIFICATION_ERROR:", err.response?.data || err.message);
+            toast.error(err.response?.data?.message || "Payment verification failed");
           }
         },
         modal: { ondismiss: () => setIsPlacingOrder(false) }

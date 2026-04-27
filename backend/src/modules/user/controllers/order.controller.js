@@ -578,7 +578,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
             await Commission.insertMany(commissionDocs, { session });
             
             // 8.5 Create Razorpay Order if not COD
-            if (['card', 'emi', 'upi', 'wallet', 'bank'].includes(normalizedPaymentMethod)) {
+            if (['card', 'emi', 'upi', 'wallet', 'bank', 'online'].includes(normalizedPaymentMethod)) {
                 // If there's a down payment, the online payment amount is the down payment
                 const paymentAmount = (order.downPaymentAmount > 0) ? order.downPaymentAmount : total;
                 
