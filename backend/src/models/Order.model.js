@@ -43,7 +43,7 @@ const orderSchema = new mongoose.Schema(
             zipCode: String,
             country: String,
         },
-        paymentMethod: { type: String, enum: ['card', 'cash', 'bank', 'wallet', 'upi', 'cod', 'emi'] },
+        paymentMethod: { type: String, enum: ['card', 'cash', 'bank', 'wallet', 'upi', 'cod', 'emi', 'online'] },
         paymentStatus: {
             type: String,
             enum: ['pending', 'paid', 'failed', 'refunded', 'partially_paid'],

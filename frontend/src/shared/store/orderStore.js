@@ -72,11 +72,21 @@ export const useOrderStore = create(
       // Create a new order
       createOrder: async (orderData) => {
         const items = Array.isArray(orderData?.items) ? orderData.items : [];
+        
+        // Defensive checks
         if (items.length === 0) {
-          throw new Error('Your cart is empty.');
+          throw new Error('Your cart is empty. Please add items before checking out.');
         }
 
-        const hasInvalidProductIds = items.some((item) => !isMongoId(item?.id));
+        if (!orderData.shippingAddress || !orderData.shippingAddress.address) {
+          throw new Error('Shipping address is required.');
+        }
+
+        if (!orderData.paymentMethod) {
+          throw new Error('Payment method is required.');
+        }
+
+        const hasInvalidProductIds = items.some((item) => !isMongoId(item?.productId || item?.id));
         if (hasInvalidProductIds) {
           throw new Error('Some cart items are outdated. Please refresh your cart and try again.');
         }
@@ -84,33 +94,49 @@ export const useOrderStore = create(
         set({ isLoading: true, lastError: null });
         try {
           const payload = {
-            items: orderData.items.map((item) => ({
-              productId: item.productId,
+            items: items.map((item) => ({
+              productId: item.productId || item.id,
               quantity: Number(item.quantity || 1),
               price: Number(item.price || 0),
               variant: item.variant || undefined,
             })),
-            shippingAddress: orderData.shippingAddress,
+            shippingAddress: {
+              name: String(orderData.shippingAddress.name || "").trim(),
+              email: String(orderData.shippingAddress.email || "").trim(),
+              phone: String(orderData.shippingAddress.phone || "").trim(),
+              address: String(orderData.shippingAddress.address || "").trim(),
+              city: String(orderData.shippingAddress.city || "").trim(),
+              state: String(orderData.shippingAddress.state || "").trim(),
+              zipCode: String(orderData.shippingAddress.zipCode || "").trim(),
+              country: String(orderData.shippingAddress.country || "India").trim(),
+            },
             paymentMethod: orderData.paymentMethod,
+            totalAmount: Number(orderData.totalAmount || 0),
             couponCode: orderData.couponCode || undefined,
             shippingOption: orderData.shippingOption || 'standard',
-            emiDetails: orderData.emiDetails || null,
+            emiDetails: orderData.emiDetails ? {
+              provider: String(orderData.emiDetails.provider || "").toLowerCase(),
+              tenure: Number(orderData.emiDetails.tenure || 0),
+              installment: Number(orderData.emiDetails.installment || 0),
+            } : undefined,
             downPaymentAmount: Number(orderData.downPaymentAmount || 0),
           };
+
           const idempotencyKey = buildIdempotencyKey(payload, orderData.userId);
           
-          console.log("PAYLOAD_EMI_CHECK:", payload.emiDetails);
-          console.log("PAYLOAD_BEING_SENT_TO_API:", JSON.stringify(payload, null, 2));
+          console.log("ORDER_PAYLOAD_PRE_FLIGHT:", JSON.stringify(payload, null, 2));
           
           const response = await api.post('/user/orders', payload, {
             headers: {
               "x-idempotency-key": idempotencyKey,
             },
           });
-          const data = response?.data ?? response;
+          
+          const data = response?.data?.data ?? response?.data ?? response;
           const createdOrderId = data?.orderId;
 
           if (!createdOrderId) {
+            console.error("ORDER_CREATION_MISSING_ID:", data);
             throw new Error('Invalid order creation response from server.');
           }
 
@@ -122,8 +148,15 @@ export const useOrderStore = create(
           set({ isLoading: false, lastError: null });
           return createdOrder;
         } catch (error) {
-          set({ isLoading: false, lastError: error?.message || 'Failed to place order.' });
-          throw error;
+          const backendError = error?.response?.data?.message || error?.response?.data?.error || error?.message;
+          console.error("ORDER_PLACEMENT_FAILED:", {
+            status: error?.response?.status,
+            data: error?.response?.data,
+            message: backendError
+          });
+          
+          set({ isLoading: false, lastError: backendError || 'Failed to place order.' });
+          throw new Error(backendError || 'Failed to place order.');
         }
       },
 

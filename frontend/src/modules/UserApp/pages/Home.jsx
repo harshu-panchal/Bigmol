@@ -331,6 +331,53 @@ const MobileHome = () => {
     return homeBrands.slice(0, 10);
   }, [homeBrands, fallbackBrands]);
 
+  const handleBannerNavigation = useCallback((link) => {
+    if (!link) return;
+    if (isExternalLink(link)) {
+      window.open(link, "_blank", "noopener,noreferrer");
+    } else {
+      navigate(link);
+    }
+  }, [navigate]);
+
+  const handleSlideClick = useCallback((slide) => {
+    if (slide?.link) {
+      handleBannerNavigation(slide.link);
+    }
+  }, [handleBannerNavigation]);
+
+  const onTouchStart = useCallback((e) => {
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsDraggingSlide(true);
+    setAutoSlidePaused(true);
+  }, []);
+
+  const onTouchMove = useCallback((e) => {
+    if (touchStart === null) return;
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+    setDragOffset(touchStart - currentTouch);
+  }, [touchStart]);
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchStart || !touchEnd) {
+      setDragOffset(0);
+      setIsDraggingSlide(false);
+      setAutoSlidePaused(false);
+      return;
+    }
+    const distance = touchStart - touchEnd;
+    if (distance > 50 && currentSlide < slides.length - 1) {
+      setCurrentSlide(prev => prev + 1);
+    } else if (distance < -50 && currentSlide > 0) {
+      setCurrentSlide(prev => prev - 1);
+    }
+    setTouchStart(null);
+    setTouchEnd(null);
+    setDragOffset(0);
+    setIsDraggingSlide(false);
+    setAutoSlidePaused(false);
+  }, [touchStart, touchEnd, currentSlide, slides.length]);
 
   const handleRefresh = async () => {
     try {

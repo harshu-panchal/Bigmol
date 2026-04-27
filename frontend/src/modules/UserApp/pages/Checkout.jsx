@@ -105,18 +105,29 @@ const MobileCheckout = () => {
 
   const handlePlaceOrder = async (e) => {
     if (e) e.preventDefault();
-    if (!shippingAddress) return toast.error("Please select an address");
     if (isPlacingOrder) return;
+
+    // Frontend validation before API call
+    if (!items || items.length === 0) {
+      return toast.error("Your cart is empty");
+    }
+
+    if (!shippingAddress || !shippingAddress.address) {
+      return toast.error("Please select a delivery address");
+    }
+
+    if (!paymentMethod) {
+      return toast.error("Please select a payment method");
+    }
 
     setIsPlacingOrder(true);
     try {
       const orderData = {
         items: items.map(i => ({
-          id: i.id,
-          productId: i.id,
-          quantity: i.quantity,
+          productId: i.productId || i.id,
+          quantity: Number(i.quantity || 1),
           variant: i.variant,
-          price: i.price,
+          price: Number(i.price || 0),
           name: i.name,
           image: i.image
         })),
@@ -131,17 +142,18 @@ const MobileCheckout = () => {
           email: (user?.email || "").trim()
         },
         paymentMethod,
+        totalAmount: Number(finalTotal || 0),
         shippingOption,
         couponCode: appliedCoupon?.code,
         emiDetails: paymentMethod === 'emi' ? {
-          provider: selectedEMIProvider,
-          tenure: selectedEMITenure,
-          installment: emiInstallment
+          provider: String(selectedEMIProvider || "").toLowerCase(),
+          tenure: Number(selectedEMITenure || 0),
+          installment: Number(emiInstallment || 0)
         } : undefined,
-        downPaymentAmount: downPayment
+        downPaymentAmount: Number(downPayment || 0)
       };
 
-      console.log("FINAL_ORDER_PAYLOAD:", JSON.stringify(orderData, null, 2));
+      console.log("SENDING_ORDER_PAYLOAD:", JSON.stringify(orderData, null, 2));
 
       const order = await createOrder(orderData);
 
@@ -180,8 +192,12 @@ const MobileCheckout = () => {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      console.error("ORDER_PLACEMENT_ERROR:", err);
-      const errorMsg = err?.response?.data?.message || err?.message || "Order failed";
+      console.error("ORDER_PLACEMENT_ERROR:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Order placement failed";
       toast.error(errorMsg);
       setIsPlacingOrder(false);
     }
