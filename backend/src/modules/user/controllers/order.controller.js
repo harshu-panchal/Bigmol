@@ -740,6 +740,10 @@ export const getOrderDetail = asyncHandler(async (req, res) => {
         .populate({
             path: 'deliveryBoyId',
             select: 'name phone avatar currentLocation status vehicleType vehicleNumber'
+        })
+        .populate({
+            path: 'userId',
+            select: 'deliveryOtp'
         });
 
     if (!order) throw new ApiError(404, 'Order not found.');

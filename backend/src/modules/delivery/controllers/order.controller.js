@@ -2,6 +2,7 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Order from '../../../models/Order.model.js';
+import User from '../../../models/User.model.js';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import { sendEmail } from '../../../services/email.service.js';
@@ -264,9 +265,17 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
     }
 
     if (status === 'shipped') {
-        const generatedOtp = generateDeliveryOtp();
+        let generatedOtp = generateDeliveryOtp();
+        
+        if (order.userId) {
+            const user = await User.findById(order.userId);
+            if (user && user.deliveryOtp) {
+                generatedOtp = user.deliveryOtp;
+            }
+        }
+
         order.deliveryOtpHash = hashDeliveryOtp(generatedOtp);
-        order.deliveryOtpExpiry = new Date(Date.now() + DELIVERY_OTP_TTL_MS);
+        order.deliveryOtpExpiry = new Date(Date.now() + (order.userId ? 365 * 24 * 60 * 60 * 1000 : DELIVERY_OTP_TTL_MS));
         order.deliveryOtpSentAt = new Date();
         order.deliveryOtpAttempts = 0;
         order.deliveryOtpVerifiedAt = undefined;
@@ -303,7 +312,18 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
             throw new ApiError(429, 'Maximum OTP attempts reached. Please resend OTP.');
         }
 
-        const isMatch = order.deliveryOtpHash === hashDeliveryOtp(normalizedOtp);
+        let isMatch = false;
+        if (order.userId) {
+            const user = await User.findById(order.userId);
+            if (user && user.deliveryOtp) {
+                isMatch = String(user.deliveryOtp) === normalizedOtp;
+            }
+        }
+
+        if (!isMatch) {
+            isMatch = order.deliveryOtpHash === hashDeliveryOtp(normalizedOtp);
+        }
+
         if (!isMatch) {
             order.deliveryOtpAttempts = attempts + 1;
             await order.save();
@@ -420,9 +440,16 @@ export const resendDeliveryOtp = asyncHandler(async (req, res) => {
         throw new ApiError(429, 'Please wait before requesting another OTP.');
     }
 
-    const generatedOtp = generateDeliveryOtp();
+    let generatedOtp = generateDeliveryOtp();
+    if (order.userId) {
+        const user = await User.findById(order.userId);
+        if (user && user.deliveryOtp) {
+            generatedOtp = user.deliveryOtp;
+        }
+    }
+
     order.deliveryOtpHash = hashDeliveryOtp(generatedOtp);
-    order.deliveryOtpExpiry = new Date(Date.now() + DELIVERY_OTP_TTL_MS);
+    order.deliveryOtpExpiry = new Date(Date.now() + (order.userId ? 365 * 24 * 60 * 60 * 1000 : DELIVERY_OTP_TTL_MS));
     order.deliveryOtpSentAt = new Date();
     order.deliveryOtpAttempts = 0;
     if (!IS_PRODUCTION) {
