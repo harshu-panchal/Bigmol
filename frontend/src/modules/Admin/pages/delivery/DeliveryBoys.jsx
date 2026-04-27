@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiMapPin, FiPhone, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiMapPin, FiPhone, FiFileText, FiX } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../components/DataTable';
 import Badge from '../../../../shared/components/Badge';
@@ -27,6 +27,7 @@ const DeliveryBoys = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [applicationFilter, setApplicationFilter] = useState('all');
   const [editingBoy, setEditingBoy] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -178,24 +179,22 @@ const DeliveryBoys = () => {
       render: (_, row) => (
         <div className="flex items-center gap-2">
           {row.documentUrls?.drivingLicense && (
-            <a
-              href={row.documentUrls.drivingLicense}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-primary-600 hover:text-primary-700 font-semibold"
+            <button
+              type="button"
+              onClick={() => setSelectedImage({ url: row.documentUrls.drivingLicense, title: 'Driving License' })}
+              className="text-xs text-primary-600 hover:text-primary-700 font-semibold focus:outline-none"
             >
               License
-            </a>
+            </button>
           )}
           {row.documentUrls?.aadharCard && (
-            <a
-              href={row.documentUrls.aadharCard}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-primary-600 hover:text-primary-700 font-semibold"
+            <button
+              type="button"
+              onClick={() => setSelectedImage({ url: row.documentUrls.aadharCard, title: 'Aadhar Card' })}
+              className="text-xs text-primary-600 hover:text-primary-700 font-semibold focus:outline-none"
             >
               Aadhar
-            </a>
+            </button>
           )}
           {!row.documentUrls?.drivingLicense && !row.documentUrls?.aadharCard && (
             <span className="text-xs text-gray-500">N/A</span>
@@ -424,26 +423,24 @@ const DeliveryBoys = () => {
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       {editingBoy.documentUrls?.drivingLicense && (
-                        <a
-                          href={editingBoy.documentUrls.drivingLicense}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImage({ url: editingBoy.documentUrls.drivingLicense, title: 'Driving License' })}
                           className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-semibold"
                         >
                           <FiFileText />
                           Driving License
-                        </a>
+                        </button>
                       )}
                       {editingBoy.documentUrls?.aadharCard && (
-                        <a
-                          href={editingBoy.documentUrls.aadharCard}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImage({ url: editingBoy.documentUrls.aadharCard, title: 'Aadhar Card' })}
                           className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-semibold"
                         >
                           <FiFileText />
                           Aadhar Card
-                        </a>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -556,6 +553,77 @@ const DeliveryBoys = () => {
                   </div>
                 </form>
               </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Document Image Preview Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedImage(null)}
+              className="fixed inset-0 bg-black/80 z-[20000] backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-[20001] flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col pointer-events-auto">
+                <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <FiFileText className="text-primary-600" />
+                    {selectedImage.title}
+                  </h3>
+                  <button
+                    onClick={() => setSelectedImage(null)}
+                    className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+                  >
+                    <FiX />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center min-h-[300px]">
+                  {selectedImage.url.toLowerCase().includes('.pdf') || selectedImage.url.toLowerCase().split('?')[0].endsWith('.pdf') ? (
+                    <iframe
+                      src={selectedImage.url}
+                      className="w-full h-full min-h-[600px] border-none"
+                      title={selectedImage.title}
+                    />
+                  ) : (
+                    <img
+                      src={selectedImage.url}
+                      alt={selectedImage.title}
+                      className="max-w-full max-h-full object-contain"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://placehold.co/600x400?text=Image+Not+Found';
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
+                  <a
+                    href={selectedImage.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all font-semibold text-sm flex items-center gap-2"
+                  >
+                    Open in New Tab
+                  </a>
+                  <button
+                    onClick={() => setSelectedImage(null)}
+                    className="px-6 py-2 gradient-green text-white rounded-lg hover:shadow-glow-green transition-all font-semibold text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </>
         )}
