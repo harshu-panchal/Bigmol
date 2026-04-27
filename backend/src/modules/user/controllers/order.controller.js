@@ -62,6 +62,20 @@ const resolveVariantSelection = (product, selectedVariant, isWholesaler = false)
         : [];
     const hasDynamicAxes = attributeAxes.length > 0;
 
+    // Support explicit variant ID if provided in selection
+    const explicitId = selectedVariant?._id || selectedVariant?.id || selectedVariant?.variantId;
+    if (explicitId) {
+        const stockEntries = toVariantStockEntries(product?.variants?.stockMap);
+        const priceEntries = toVariantPriceEntries(product?.variants?.prices);
+        const allKeys = [...new Set([...stockEntries.map(e => e[0]), ...priceEntries.map(e => e[0])])];
+        
+        const matchedKey = allKeys.find(k => String(k) === String(explicitId));
+        if (matchedKey) {
+            const price = Number(priceEntries.find(e => String(e[0]) === String(matchedKey))?.[1] ?? basePrice);
+            return { price, variantKey: String(matchedKey), hasVariantAxes: true };
+        }
+    }
+
     if (hasDynamicAxes) {
         const normalizedSelection = {};
         Object.entries(selectedVariant || {}).forEach(([axis, value]) => {
@@ -197,6 +211,50 @@ const resolveOrderItemVariantKey = (product, orderItem) => {
     return null;
 };
 
+/**
+ * Safely resolves stock for a variant key, handling Map/Object and case-insensitivity.
+ * Returns null if no variant stock is defined.
+ */
+const getVariantStock = (product, variantKey) => {
+    if (!product || !variantKey || !product?.variants?.stockMap) return null;
+    const stockMap = product.variants.stockMap;
+    const vKey = String(variantKey).trim();
+    
+    // 1. Try exact match (Map or Object)
+    let stock = typeof stockMap.get === 'function' ? stockMap.get(vKey) : stockMap[vKey];
+    if (stock !== undefined && stock !== null) return Number(stock);
+
+    // 2. Try case-insensitive match
+    const entries = toVariantStockEntries(stockMap);
+    const normKey = normalizeVariantPart(vKey);
+    const found = entries.find(([k]) => normalizeVariantPart(k) === normKey);
+    
+    if (found) return Number(found[1]);
+    
+    return null;
+};
+
+/**
+ * Finds the actual key used in the stockMap that matches the given variantKey.
+ * Useful for $inc updates to avoid creating new keys with different casing.
+ */
+const getActualStockKey = (product, variantKey) => {
+    if (!product || !variantKey || !product?.variants?.stockMap) return variantKey;
+    const stockMap = product.variants.stockMap;
+    const vKey = String(variantKey).trim();
+
+    // Exact check
+    const hasKey = typeof stockMap.has === 'function' ? stockMap.has(vKey) : (stockMap[vKey] !== undefined);
+    if (hasKey) return vKey;
+
+    // Normalized check
+    const entries = toVariantStockEntries(stockMap);
+    const normKey = normalizeVariantPart(vKey);
+    const found = entries.find(([k]) => normalizeVariantPart(k) === normKey);
+    
+    return found ? String(found[0]).trim() : vKey;
+};
+
 // POST /api/user/orders
 export const placeOrder = asyncHandler(async (req, res) => {
     console.log("BACKEND_ORDER_BODY:", JSON.stringify(req.body, null, 2));
@@ -250,13 +308,16 @@ export const placeOrder = asyncHandler(async (req, res) => {
     const vendorMap = {};
 
     for (const item of items) {
+        console.log(`[DEBUG] Validating stock for product: ${item.productId}, Quantity: ${item.quantity}`);
         const product = await Product.findById(item.productId).populate(
             'vendorId',
             'commissionRate storeName shippingEnabled defaultShippingRate freeShippingThreshold'
         );
         if (!product) throw new ApiError(404, `Product not found: ${item.productId}`);
+        const quantity = Number(item.quantity || 0);
+
         if (product.stock === 'out_of_stock') throw new ApiError(400, `${product.name} is out of stock.`);
-        if (product.stockQuantity < item.quantity) throw new ApiError(400, `Only ${product.stockQuantity} units of ${product.name} available.`);
+
         
         if (isWholesaler) {
             if (!product.wholesalePrice) {
@@ -269,10 +330,25 @@ export const placeOrder = asyncHandler(async (req, res) => {
 
         // Always trust server-side product pricing; never trust client-sent item.price.
         const { price: itemPrice, variantKey, hasVariantAxes } = resolveVariantSelection(product, item.variant, isWholesaler);
-        const variantStockValue = variantKey ? Number(product?.variants?.stockMap?.get?.(variantKey) ?? product?.variants?.stockMap?.[variantKey]) : null;
-        if (hasVariantAxes && variantKey && Number.isFinite(variantStockValue) && variantStockValue < item.quantity) {
-            throw new ApiError(400, `Only ${variantStockValue} units available for selected variant of ${product.name}.`);
+        
+        // Robust variant stock check
+        const variantStockValue = getVariantStock(product, variantKey);
+        
+        // If variant stock is explicitly defined (even 0), we respect it.
+        // Otherwise, we fallback to main stockQuantity.
+        if (hasVariantAxes && variantKey && variantStockValue !== null && !isNaN(variantStockValue)) {
+            if (variantStockValue < quantity) {
+                console.log(`[DEBUG] Variant stock insufficient: ${variantStockValue} < ${quantity}`);
+                throw new ApiError(400, `Only ${variantStockValue} units available for selected variant of ${product.name}.`);
+            }
+        } else {
+            // Fallback to main stock check
+            if ((product.stockQuantity || 0) < quantity) {
+                console.log(`[DEBUG] Main stock insufficient: ${product.stockQuantity} < ${quantity}`);
+                throw new ApiError(400, `Only ${product.stockQuantity || 0} units of ${product.name} available.`);
+            }
         }
+        
         const itemSubtotal = itemPrice * item.quantity;
         subtotal += itemSubtotal;
 
@@ -430,18 +506,29 @@ export const placeOrder = asyncHandler(async (req, res) => {
             const deductedItems = [];
             try {
                 for (const item of enrichedItems) {
-                    const variantPath = item.variantKey ? `variants.stockMap.${item.variantKey}` : null;
+                    const product = await Product.findById(item.productId).session(session);
+                    if (!product) throw new ApiError(404, `Product context missing for ${item.name}.`);
+                    
+                    const actualStockKey = getActualStockKey(product, item.variantKey);
+                    const variantPath = actualStockKey ? `variants.stockMap.${actualStockKey}` : null;
+                    
                     const baseFilter = {
                         _id: item.productId,
                         stock: { $ne: 'out_of_stock' },
                         stockQuantity: { $gte: Number(item.quantity || 0) },
                     };
+                    
                     if (variantPath) {
-                        baseFilter[variantPath] = { $gte: Number(item.quantity || 0) };
+                        // Only add variant filter if variant stock was used and found
+                        const vStock = getVariantStock(product, item.variantKey);
+                        if (vStock !== null && !isNaN(vStock)) {
+                            baseFilter[variantPath] = { $gte: Number(item.quantity || 0) };
+                        }
                     }
 
                     const updatePayload = { $inc: { stockQuantity: -Number(item.quantity || 0) } };
                     if (variantPath) {
+                        // If variantPath is set, ensure we update the CORRECT case-sensitive key
                         updatePayload.$inc[variantPath] = -Number(item.quantity || 0);
                     }
 
@@ -592,6 +679,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
 
                 // Manual Stock Deduction in Fallback mode
                 for (const item of enrichedItems) {
+                    const product = await Product.findById(item.productId);
                     const variantPath = item.variantKey ? `variants.stockMap.${item.variantKey}` : null;
                     const updPayload = { $inc: { stockQuantity: -Number(item.quantity) } };
                     if (variantPath) updPayload.$inc[variantPath] = -Number(item.quantity);

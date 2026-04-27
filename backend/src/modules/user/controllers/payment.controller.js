@@ -9,23 +9,45 @@ import crypto from 'crypto';
 export const verifyPayment = asyncHandler(async (req, res) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    const order = await Order.findOne({ razorpayOrderId: razorpay_order_id });
-    if (!order) {
-        throw new ApiError(404, 'Order not found for this payment');
+    // 1. Validate required fields
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[Payment Verification] Missing required fields:', {
+                razorpay_order_id: !!razorpay_order_id,
+                razorpay_payment_id: !!razorpay_payment_id,
+                razorpay_signature: !!razorpay_signature,
+                received_body: req.body
+            });
+        }
+        throw new ApiError(400, 'Missing payment fields');
     }
 
-    // Idempotency check: if order is already paid, return success
+    // 2. Find order
+    const order = await Order.findOne({ razorpayOrderId: razorpay_order_id });
+    if (!order) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error(`[Payment Verification] Order not found for Razorpay Order ID: ${razorpay_order_id}`);
+        }
+        throw new ApiError(404, 'Order not found');
+    }
+
+    // 3. Idempotency check: if order is already paid, return success
     if (order.paymentStatus === 'paid' || order.paymentStatus === 'partially_paid') {
         return res.status(200).json(
             new ApiResponse(200, order, 'Payment already verified')
         );
     }
 
+    // 4. Verify signature (HMAC SHA256: order_id + "|" + payment_id)
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+        console.error('[Payment Verification] RAZORPAY_KEY_SECRET is not defined in environment variables');
+        throw new ApiError(500, 'Payment configuration error');
+    }
 
-    // Verify signature
     const text = razorpay_order_id + "|" + razorpay_payment_id;
     const generated_signature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .createHmac('sha256', secret)
         .update(text.toString())
         .digest('hex');
 
@@ -59,9 +81,17 @@ export const verifyPayment = asyncHandler(async (req, res) => {
             new ApiResponse(200, order, 'Payment verified successfully')
         );
     } else {
+        // 5. Signature mismatch
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[Payment Verification] Signature mismatch:', {
+                expected: generated_signature,
+                received: razorpay_signature
+            });
+        }
+        
         order.paymentStatus = 'failed';
         await order.save();
-        throw new ApiError(400, 'Invalid payment signature');
+        throw new ApiError(400, 'Invalid signature');
     }
 });
 
