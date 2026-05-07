@@ -310,6 +310,14 @@ const VendorDetail = () => {
               Suspend
             </button>
           )}
+          {vendor.status === "suspended" && (
+            <button
+              onClick={() => handleStatusUpdate("approved")}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+              <FiCheckCircle />
+              Unsuspend
+            </button>
+          )}
         </div>
       </div>
 

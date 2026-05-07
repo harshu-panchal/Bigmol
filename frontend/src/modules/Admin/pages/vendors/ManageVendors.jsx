@@ -239,6 +239,22 @@ const ManageVendors = () => {
               <FiXCircle />
             </button>
           )}
+          {row.status === "suspended" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActionModal({
+                  isOpen: true,
+                  type: "unsuspend",
+                  vendorId: row.id,
+                  vendorName: row.storeName || row.name,
+                });
+              }}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Unsuspend Vendor">
+              <FiCheckCircle />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -297,6 +313,21 @@ const ManageVendors = () => {
     }
   };
 
+  const handleUnsuspend = async () => {
+    const success = await updateVendorStatus(actionModal.vendorId, "approved");
+    if (success) {
+      toast.success("Vendor unsuspended successfully");
+      setActionModal({
+        isOpen: false,
+        type: null,
+        vendorId: null,
+        vendorName: null,
+      });
+    } else {
+      toast.error("Failed to unsuspend vendor");
+    }
+  };
+
   const handleCommissionUpdate = async () => {
     const rate = parseFloat(commissionRate) / 100;
     if (isNaN(rate) || rate < 0 || rate > 1) {
@@ -349,6 +380,14 @@ const ManageVendors = () => {
               />
             </div>
           ),
+        };
+      case "unsuspend":
+        return {
+          title: "Unsuspend Vendor?",
+          message: `Are you sure you want to unsuspend "${actionModal.vendorName}"? They will regain access to their vendor dashboard.`,
+          confirmText: "Unsuspend",
+          onConfirm: handleUnsuspend,
+          type: "info",
         };
       case "commission":
         return {
