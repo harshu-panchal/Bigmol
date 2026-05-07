@@ -20,19 +20,24 @@ import AnimatedSelect from '../components/AnimatedSelect';
 import { formatCurrency, formatDateTime } from '../utils/adminHelpers';
 import { getPlaceholderImage } from '../../../shared/utils/helpers';
 import { useReturnStore } from '../../../shared/store/returnStore';
+import { useDeliveryStore } from '../../../shared/store/deliveryStore';
+import { FiTruck, FiUser } from 'react-icons/fi';
 
 const RETURN_PRODUCT_PLACEHOLDER = getPlaceholderImage(100, 100, 'Product');
 
 const ReturnRequestDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { fetchReturnRequestById, updateReturnStatus } = useReturnStore();
+  const { deliveryBoys, fetchDeliveryBoys } = useDeliveryStore();
+  const { fetchReturnRequestById, updateReturnStatus, assignDeliveryForReturn } = useReturnStore();
   const [returnRequest, setReturnRequest] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [status, setStatus] = useState('');
   const statusTransitions = {
     pending: ['approved', 'rejected'],
-    approved: ['processing', 'completed'],
+    approved: ['pickup_assigned', 'processing', 'completed'],
+    pickup_assigned: ['picked_up', 'approved'],
+    picked_up: ['processing', 'completed'],
     processing: ['completed'],
     rejected: [],
     completed: [],
@@ -49,7 +54,20 @@ const ReturnRequestDetail = () => {
       }
     };
     loadDetail();
-  }, [id, navigate, fetchReturnRequestById]);
+    fetchDeliveryBoys({ isActive: true, applicationStatus: 'approved' });
+  }, [id, navigate, fetchReturnRequestById, fetchDeliveryBoys]);
+
+  const handleAssignDelivery = async (deliveryBoyId) => {
+    if (!deliveryBoyId) return;
+    const success = await assignDeliveryForReturn(id, deliveryBoyId);
+    if (success) {
+      const data = await fetchReturnRequestById(id);
+      if (data) {
+        setReturnRequest(data);
+        setStatus(data.status);
+      }
+    }
+  };
 
   const handleStatusUpdate = async (newStatus, action = '') => {
     const statusData = { status: newStatus };
@@ -90,9 +108,11 @@ const ReturnRequestDetail = () => {
     const statusMap = {
       pending: 'pending',
       approved: 'approved',
-      rejected: 'rejected',
+      pickup_assigned: 'processing',
+      picked_up: 'processing',
       processing: 'processing',
       completed: 'completed',
+      rejected: 'rejected'
     };
     return statusMap[status] || 'pending';
   };
@@ -412,7 +432,7 @@ const ReturnRequestDetail = () => {
                   </div>
                 </div>
               )}
-              {returnRequest.status === 'processing' && (
+              {(returnRequest.status === 'processing' || returnRequest.status === 'pickup_assigned' || returnRequest.status === 'picked_up') && (
                 <div className="flex items-start gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 flex-shrink-0"></div>
                   <div className="flex-1 min-w-0">
@@ -441,6 +461,56 @@ const ReturnRequestDetail = () => {
               )}
             </div>
           </div>
+
+          {/* Delivery Boy Assignment */}
+          {(returnRequest.status === 'approved' || returnRequest.status === 'pickup_assigned') && (
+            <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+              <h2 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <FiTruck className="text-primary-600 text-base" />
+                Delivery Partner
+              </h2>
+              <div className="space-y-3">
+                {returnRequest.deliveryBoyId ? (
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                        <FiUser className="text-lg" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-800">
+                          {deliveryBoys.find(b => b.id === (returnRequest.deliveryBoyId?.id || returnRequest.deliveryBoyId))?.name || 'Assigned Partner'}
+                        </p>
+                        <p className="text-xs text-gray-500">Pickup status: {returnRequest.status}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Reassign Partner</label>
+                      <AnimatedSelect
+                        value=""
+                        onChange={(e) => handleAssignDelivery(e.target.value)}
+                        options={[
+                          { value: '', label: 'Select Partner to Reassign' },
+                          ...deliveryBoys.map(boy => ({ value: boy.id, label: boy.name }))
+                        ]}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">Assign a delivery partner to pick up the return item from the customer.</p>
+                    <AnimatedSelect
+                      value=""
+                      onChange={(e) => handleAssignDelivery(e.target.value)}
+                      options={[
+                        { value: '', label: 'Select Delivery Partner' },
+                        ...deliveryBoys.map(boy => ({ value: boy.id, label: boy.name }))
+                      ]}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">

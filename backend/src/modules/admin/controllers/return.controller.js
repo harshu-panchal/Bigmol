@@ -2,6 +2,7 @@ import ReturnRequest from '../../../models/ReturnRequest.model.js';
 import Order from '../../../models/Order.model.js';
 import User from '../../../models/User.model.js';
 import Product from '../../../models/Product.model.js';
+import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import { createNotification } from '../../../services/notification.service.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { ApiResponse } from '../../../utils/ApiResponse.js';
@@ -158,11 +159,13 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Return request not found');
     }
 
-    const allowedStatuses = ['pending', 'approved', 'processing', 'rejected', 'completed'];
+    const allowedStatuses = ['pending', 'approved', 'pickup_assigned', 'picked_up', 'processing', 'rejected', 'completed'];
     const allowedRefundStatuses = ['pending', 'processed', 'failed'];
     const statusTransitions = {
         pending: ['approved', 'rejected'],
-        approved: ['processing', 'completed'],
+        approved: ['pickup_assigned', 'processing', 'completed'],
+        pickup_assigned: ['picked_up', 'approved', 'pickup_assigned'],
+        picked_up: ['processing', 'completed'],
         processing: ['completed'],
         rejected: [],
         completed: [],
@@ -298,4 +301,50 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
     const normalized = normalizeReturnRequest(request);
 
     res.status(200).json(new ApiResponse(200, normalized, 'Return request status updated successfully'));
+});
+
+/**
+ * @desc    Assign a delivery boy for return pickup
+ * @route   PATCH /api/admin/return-requests/:id/assign-delivery
+ * @access  Private (Admin)
+ */
+export const assignDeliveryBoyForPickup = asyncHandler(async (req, res) => {
+    const { deliveryBoyId } = req.body;
+    if (!deliveryBoyId) throw new ApiError(400, 'deliveryBoyId is required.');
+
+    const deliveryBoy = await DeliveryBoy.findById(deliveryBoyId).select('name isActive applicationStatus');
+    if (!deliveryBoy) throw new ApiError(404, 'Delivery boy not found.');
+    if (!deliveryBoy.isActive) throw new ApiError(400, 'Delivery boy is inactive.');
+    if (deliveryBoy.applicationStatus !== 'approved') {
+        throw new ApiError(400, 'Delivery boy is not approved.');
+    }
+
+    const request = await ReturnRequest.findById(req.params.id).populate('orderId userId');
+    if (!request) throw new ApiError(404, 'Return request not found.');
+
+    if (!['approved', 'pickup_assigned'].includes(request.status)) {
+        throw new ApiError(409, `Cannot assign delivery for return request in ${request.status} status. Approve it first.`);
+    }
+
+    const isReassigned = request.deliveryBoyId && String(request.deliveryBoyId) !== String(deliveryBoyId);
+
+    request.deliveryBoyId = deliveryBoyId;
+    request.status = 'pickup_assigned';
+    await request.save();
+
+    // Notify delivery boy
+    await createNotification({
+        recipientId: deliveryBoy._id,
+        recipientType: 'delivery',
+        title: isReassigned ? 'Return pickup reassigned' : 'New return pickup assigned',
+        message: `A return pickup for order ${request.orderId?.orderId || 'N/A'} has been assigned to you.`,
+        type: 'order',
+        data: {
+            returnRequestId: String(request._id),
+            orderId: String(request.orderId?.orderId || ''),
+            reassigned: isReassigned ? 'true' : 'false',
+        },
+    });
+
+    res.status(200).json(new ApiResponse(200, normalizeReturnRequest(request), 'Delivery boy assigned for pickup.'));
 });

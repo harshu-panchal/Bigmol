@@ -56,6 +56,11 @@ if (!IS_PRODUCTION) {
 router.patch('/orders/:id/status', ...deliveryAuth, validate(updateStatusSchema), orderController.updateDeliveryStatus);
 router.post('/orders/:id/resend-delivery-otp', ...deliveryAuth, orderController.resendDeliveryOtp);
 
+// Returns
+router.get('/returns', ...deliveryAuth, orderController.getAssignedPickups);
+router.post('/returns/:id/send-otp', ...deliveryAuth, orderController.sendPickupOtp);
+router.patch('/returns/:id/pickup', ...deliveryAuth, orderController.completePickup);
+
 // Notifications
 router.get('/notifications', ...deliveryAuth, notificationController.getDeliveryNotifications);
 router.put('/notifications/:id/read', ...deliveryAuth, notificationController.markDeliveryNotificationAsRead);

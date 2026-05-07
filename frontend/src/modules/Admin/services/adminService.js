@@ -212,6 +212,9 @@ export const updateReturnRequestStatus = (id, statusOrPayload, adminNote = '') =
     return api.patch(`/admin/return-requests/${id}/status`, payload);
 };
 
+export const assignDeliveryBoyForReturn = (id, deliveryBoyId) =>
+    api.patch(`/admin/return-requests/${id}/assign-delivery`, { deliveryBoyId });
+
 // ——— Reviews —————————————————————————————————————————————————————————————————————
 export const getAllReviews = (params = {}) =>
     api.get('/admin/reviews', { params });

@@ -155,6 +155,7 @@ router.delete('/delivery-boys/:id/unassign-order/:orderId', ...adminAuth, delive
 router.get('/return-requests', ...adminAuth, returnController.getAllReturnRequests);
 router.get('/return-requests/:id', ...adminAuth, returnController.getReturnRequestById);
 router.patch('/return-requests/:id/status', ...adminAuth, returnController.updateReturnRequestStatus);
+router.patch('/return-requests/:id/assign-delivery', ...adminAuth, returnController.assignDeliveryBoyForPickup);
 
 // ─── Support Tickets ──────────────────────────────────────────────────────────
 router.get('/support/tickets', ...adminAuth, supportController.getAllTickets);

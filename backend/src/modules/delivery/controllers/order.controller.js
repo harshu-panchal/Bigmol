@@ -2,6 +2,7 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Order from '../../../models/Order.model.js';
+import ReturnRequest from '../../../models/ReturnRequest.model.js';
 import User from '../../../models/User.model.js';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
@@ -256,12 +257,20 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
     const order = await Order.findOne(query).select('+deliveryOtpHash +deliveryOtpExpiry +deliveryOtpSentAt +deliveryOtpAttempts +deliveryOtpDebug');
     if (!order) throw new ApiError(404, 'Order not found.');
 
+    if (order.status === status) {
+        return res.status(200).json(new ApiResponse(200, order, `Order is already ${status}.`));
+    }
+
+    if (['delivered', 'cancelled', 'returned'].includes(order.status)) {
+        throw new ApiError(409, `Order is already ${order.status} and cannot be updated further.`);
+    }
+
     // Server-side transition guard (frontend guard already exists).
     const transitionAllowed =
         (status === 'shipped' && ['pending', 'processing'].includes(order.status)) ||
         (status === 'delivered' && order.status === 'shipped');
     if (!transitionAllowed) {
-        throw new ApiError(409, `Cannot move order from ${order.status} to ${status}.`);
+        throw new ApiError(409, `Invalid transition: Cannot move order from ${order.status} to ${status}.`);
     }
 
     if (status === 'shipped') {
@@ -576,4 +585,169 @@ export const getEarnings = asyncHandler(async (req, res) => {
     };
 
     res.status(200).json(new ApiResponse(200, result, 'Earnings fetched.'));
+});
+
+/**
+ * @desc    Get assigned return pickups for the delivery boy
+ * @route   GET /api/delivery/returns
+ * @access  Private (Delivery Boy)
+ */
+export const getAssignedPickups = asyncHandler(async (req, res) => {
+    const { status, page, limit } = req.query;
+    const filter = { deliveryBoyId: req.user.id };
+    
+    if (status === 'open') {
+        filter.status = 'pickup_assigned';
+    } else if (status) {
+        filter.status = status;
+    }
+
+    const numericPage = Math.max(1, Number(page) || 1);
+    const numericLimit = Math.max(1, Number(limit) || 20);
+    const skip = (numericPage - 1) * numericLimit;
+
+    const [pickups, total] = await Promise.all([
+        ReturnRequest.find(filter)
+            .populate({
+                path: 'orderId',
+                select: 'orderId shippingAddress'
+            })
+            .populate('userId', 'name email phone')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(numericLimit),
+        ReturnRequest.countDocuments(filter),
+    ]);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                pickups,
+                pagination: {
+                    total,
+                    page: numericPage,
+                    limit: numericLimit,
+                    pages: Math.ceil(total / numericLimit) || 1,
+                },
+            },
+            'Assigned pickups fetched.'
+        )
+    );
+});
+
+/**
+ * @desc    Send/Resend OTP for return pickup
+ * @route   POST /api/delivery/returns/:id/send-otp
+ * @access  Private (Delivery Boy)
+ */
+export const sendPickupOtp = asyncHandler(async (req, res) => {
+    const pickup = await ReturnRequest.findOne({
+        _id: req.params.id,
+        deliveryBoyId: req.user.id
+    }).populate('orderId userId');
+
+    if (!pickup) throw new ApiError(404, 'Return pickup not found.');
+
+    const generatedOtp = generateDeliveryOtp();
+    pickup.pickupOtpHash = hashDeliveryOtp(generatedOtp);
+    pickup.pickupOtpExpiry = new Date(Date.now() + (15 * 60 * 1000)); // 15 mins
+    pickup.pickupOtpSentAt = new Date();
+    pickup.pickupOtpAttempts = 0;
+    
+    if (!IS_PRODUCTION) {
+        pickup.pickupOtpDebug = generatedOtp;
+    }
+    
+    await pickup.save();
+
+    // Send email
+    const to = pickup.userId?.email || pickup.orderId?.shippingAddress?.email;
+    if (to) {
+        try {
+            await sendEmail({
+                to,
+                subject: `Pickup OTP for Return Request`,
+                text: `Your pickup verification OTP is ${generatedOtp}. Share it with the delivery partner only during item collection.`,
+                html: `<p>Your pickup verification OTP is <strong>${generatedOtp}</strong>.</p><p>Share it with the delivery partner only during item collection.</p>`,
+            });
+        } catch (err) {
+            console.warn(`[Pickup OTP] Failed to send email: ${err.message}`);
+        }
+    }
+
+    res.status(200).json(new ApiResponse(200, { debugOtp: !IS_PRODUCTION ? generatedOtp : undefined }, 'Pickup OTP sent successfully.'));
+});
+
+/**
+ * @desc    Complete return pickup
+ * @route   PATCH /api/delivery/returns/:id/pickup
+ * @access  Private (Delivery Boy)
+ */
+export const completePickup = asyncHandler(async (req, res) => {
+    const { otp } = req.body;
+    if (!otp) throw new ApiError(400, 'OTP is required.');
+
+    const pickup = await ReturnRequest.findOne({
+        _id: req.params.id,
+        deliveryBoyId: req.user.id
+    }).select('+pickupOtpHash +pickupOtpExpiry +pickupOtpAttempts');
+
+    if (!pickup) throw new ApiError(404, 'Return pickup not found.');
+    if (pickup.status !== 'pickup_assigned') {
+        throw new ApiError(409, `Cannot pickup return in ${pickup.status} status.`);
+    }
+
+    if (pickup.pickupOtpExpiry < new Date()) {
+        throw new ApiError(400, 'OTP has expired. Please resend.');
+    }
+
+    if (pickup.pickupOtpAttempts >= 5) {
+        throw new ApiError(429, 'Too many attempts. Please resend OTP.');
+    }
+
+    const isMatch = pickup.pickupOtpHash === hashDeliveryOtp(otp);
+    if (!isMatch) {
+        pickup.pickupOtpAttempts = (pickup.pickupOtpAttempts || 0) + 1;
+        await pickup.save();
+        throw new ApiError(400, 'Invalid OTP.');
+    }
+
+    pickup.status = 'picked_up';
+    pickup.pickupOtpVerifiedAt = new Date();
+    pickup.pickupOtpHash = undefined;
+    pickup.pickupOtpExpiry = undefined;
+    pickup.pickupOtpSentAt = undefined;
+    pickup.pickupOtpAttempts = 0;
+    pickup.pickupOtpDebug = undefined;
+    
+    await pickup.save();
+
+    // Notify user and vendor
+    const notificationTasks = [];
+    if (pickup.userId) {
+        notificationTasks.push(createNotification({
+            recipientId: pickup.userId,
+            recipientType: 'user',
+            title: 'Return item picked up',
+            message: `Your return item has been successfully picked up.`,
+            type: 'order',
+            data: { returnRequestId: String(pickup._id) }
+        }));
+    }
+    
+    if (pickup.vendorId) {
+        notificationTasks.push(createNotification({
+            recipientId: pickup.vendorId,
+            recipientType: 'vendor',
+            title: 'Return item picked up',
+            message: `A return item has been picked up by the delivery partner and is on its way.`,
+            type: 'order',
+            data: { returnRequestId: String(pickup._id) }
+        }));
+    }
+
+    await Promise.allSettled(notificationTasks);
+
+    res.status(200).json(new ApiResponse(200, pickup, 'Return picked up successfully.'));
 });

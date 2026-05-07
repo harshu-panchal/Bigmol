@@ -140,11 +140,13 @@ export const getVendorReturnRequestById = asyncHandler(async (req, res) => {
 // PATCH /api/vendor/return-requests/:id/status
 export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => {
     const { status, refundStatus, rejectionReason } = req.body;
-    const allowedStatuses = ['pending', 'approved', 'processing', 'rejected', 'completed'];
+    const allowedStatuses = ['pending', 'approved', 'pickup_assigned', 'picked_up', 'processing', 'rejected', 'completed'];
     const allowedRefundStatuses = ['pending', 'processed', 'failed'];
     const statusTransitions = {
         pending: ['approved', 'rejected'],
-        approved: ['processing', 'completed'],
+        approved: ['pickup_assigned', 'processing', 'completed'],
+        pickup_assigned: ['picked_up', 'approved', 'pickup_assigned'],
+        picked_up: ['processing', 'completed'],
         processing: ['completed'],
         rejected: [],
         completed: [],

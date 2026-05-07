@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
 import { toast } from 'react-hot-toast';
 
-const OtpModal = ({ orderId, isOpen, onClose, onSuccess }) => {
+const OtpModal = ({ orderId, isOpen, onClose, onSuccess, mode = 'delivery' }) => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const completeOrder = useDeliveryAuthStore((state) => state.completeOrder);
   const resendDeliveryOtp = useDeliveryAuthStore((state) => state.resendDeliveryOtp);
+  const completePickup = useDeliveryAuthStore((state) => state.completePickup);
+  const sendPickupOtp = useDeliveryAuthStore((state) => state.sendPickupOtp);
 
   useEffect(() => {
     let timer;
@@ -47,8 +49,13 @@ const OtpModal = ({ orderId, isOpen, onClose, onSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      await completeOrder(orderId, otpString);
-      toast.success('Order delivered successfully!');
+      if (mode === 'pickup') {
+        await completePickup(orderId, otpString);
+        toast.success('Pickup completed successfully!');
+      } else {
+        await completeOrder(orderId, otpString);
+        toast.success('Order delivered successfully!');
+      }
       onSuccess?.();
       onClose();
     } catch (error) {
@@ -61,7 +68,11 @@ const OtpModal = ({ orderId, isOpen, onClose, onSuccess }) => {
   const handleResend = async () => {
     if (resendCooldown > 0) return;
     try {
-      await resendDeliveryOtp(orderId);
+      if (mode === 'pickup') {
+        await sendPickupOtp(orderId);
+      } else {
+        await resendDeliveryOtp(orderId);
+      }
       toast.success('OTP resent to customer!');
       setResendCooldown(60);
     } catch (error) {
@@ -72,8 +83,12 @@ const OtpModal = ({ orderId, isOpen, onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 animate-in fade-in zoom-in duration-200">
-        <h3 className="text-2xl font-bold text-gray-900 mb-2 text-center">Verify Delivery</h3>
-        <p className="text-gray-500 text-center mb-8">Enter the 6-digit code provided by the customer to complete delivery.</p>
+        <h3 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+          {mode === 'pickup' ? 'Verify Pickup' : 'Verify Delivery'}
+        </h3>
+        <p className="text-gray-500 text-center mb-8">
+          Enter the 6-digit code provided by the customer to complete {mode === 'pickup' ? 'pickup' : 'delivery'}.
+        </p>
         
         <form onSubmit={handleSubmit}>
           <div className="flex justify-between gap-2 mb-8">
@@ -100,7 +115,7 @@ const OtpModal = ({ orderId, isOpen, onClose, onSuccess }) => {
               isSubmitting ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200'
             }`}
           >
-            {isSubmitting ? 'Verifying...' : 'Complete Delivery'}
+            {isSubmitting ? 'Verifying...' : (mode === 'pickup' ? 'Complete Pickup' : 'Complete Delivery')}
           </button>
         </form>
 
