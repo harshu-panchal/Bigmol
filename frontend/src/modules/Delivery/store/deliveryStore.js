@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '../../../shared/utils/api';
+import { ensureFcmToken, removeCurrentFcmToken } from '../../../shared/firebase/messaging';
 
 const normalizeDeliveryBoy = (raw) => {
   if (!raw) return null;
@@ -200,6 +201,8 @@ export const useDeliveryAuthStore = create(
             isAuthenticated: true,
             isLoading: false,
           });
+          ensureFcmToken({ forcePrompt: false }).catch(() => {});
+          window.dispatchEvent(new Event('fcm:prompt'));
 
           return { success: true, deliveryBoy: enriched };
         } catch (error) {
@@ -210,6 +213,7 @@ export const useDeliveryAuthStore = create(
 
       // Delivery boy logout action
       logout: () => {
+        removeCurrentFcmToken().catch(() => {});
         get().stopLocationTracking();
         set({
           deliveryBoy: null,

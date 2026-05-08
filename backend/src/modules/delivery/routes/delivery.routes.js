@@ -66,5 +66,7 @@ router.get('/notifications', ...deliveryAuth, notificationController.getDelivery
 router.put('/notifications/:id/read', ...deliveryAuth, notificationController.markDeliveryNotificationAsRead);
 router.put('/notifications/read-all', ...deliveryAuth, notificationController.markAllDeliveryNotificationsAsRead);
 router.delete('/notifications/:id', ...deliveryAuth, notificationController.deleteDeliveryNotification);
+router.post('/notifications/fcm-token', ...deliveryAuth, notificationController.registerDeliveryFcmToken);
+router.delete('/notifications/fcm-token', ...deliveryAuth, notificationController.removeDeliveryFcmToken);
 
 export default router;

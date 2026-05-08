@@ -15,6 +15,7 @@
     "axios": "^1.6.2",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^10.16.16",
+    "firebase": "^10.13.2",
     "gsap": "^3.12.2",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.556.0",

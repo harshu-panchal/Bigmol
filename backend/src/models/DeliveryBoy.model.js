@@ -3,6 +3,12 @@ import bcrypt from 'bcryptjs';
 
 const deliveryBoySchema = new mongoose.Schema(
     {
+        fcmTokens: [{
+            token: { type: String, trim: true },
+            platform: { type: String, enum: ['web', 'android', 'ios'], default: 'web' },
+            deviceId: { type: String, trim: true },
+            createdAt: { type: Date, default: Date.now },
+        }],
         name: { type: String, required: true, trim: true },
         email: { type: String, required: true, unique: true, lowercase: true },
         password: { type: String, required: true, select: false },

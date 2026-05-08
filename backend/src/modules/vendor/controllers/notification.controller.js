@@ -2,6 +2,7 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Notification from '../../../models/Notification.model.js';
+import { removeFcmToken, saveFcmToken } from '../../../services/fcm.service.js';
 
 // GET /api/vendor/notifications
 export const getVendorNotifications = asyncHandler(async (req, res) => {
@@ -101,3 +102,30 @@ export const deleteVendorNotification = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, null, 'Vendor notification deleted.'));
 });
 
+export const registerVendorFcmToken = asyncHandler(async (req, res) => {
+    const { token, platform = 'web', deviceId = '' } = req.body || {};
+    if (!token) throw new ApiError(400, 'FCM token is required.');
+
+    await saveFcmToken({
+        recipientType: 'vendor',
+        recipientId: req.user.id,
+        token,
+        platform,
+        deviceId,
+    });
+
+    res.status(200).json(new ApiResponse(200, null, 'FCM token registered.'));
+});
+
+export const removeVendorFcmToken = asyncHandler(async (req, res) => {
+    const { token } = req.body || {};
+    if (!token) throw new ApiError(400, 'FCM token is required.');
+
+    await removeFcmToken({
+        recipientType: 'vendor',
+        recipientId: req.user.id,
+        token,
+    });
+
+    res.status(200).json(new ApiResponse(200, null, 'FCM token removed.'));
+});

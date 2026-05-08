@@ -86,5 +86,7 @@ router.get('/notifications', ...customerAuth, notificationController.getUserNoti
 router.put('/notifications/:id/read', ...customerAuth, notificationController.markUserNotificationAsRead);
 router.put('/notifications/read-all', ...customerAuth, notificationController.markAllUserNotificationsAsRead);
 router.delete('/notifications/:id', ...customerAuth, notificationController.deleteUserNotification);
+router.post('/notifications/fcm-token', ...customerAuth, notificationController.registerUserFcmToken);
+router.delete('/notifications/fcm-token', ...customerAuth, notificationController.removeUserFcmToken);
 
 export default router;

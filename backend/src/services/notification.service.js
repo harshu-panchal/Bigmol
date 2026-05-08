@@ -1,11 +1,24 @@
 import Notification from '../models/Notification.model.js';
+import { randomUUID } from 'crypto';
+import { emitNotificationEvent } from './fcm.service.js';
 
 /**
  * Create a notification for a user/vendor/delivery/admin
  * @param {Object} options - { recipientId, recipientType, title, message, type, data }
  */
 export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {} }) => {
-    return Notification.create({ recipientId, recipientType, title, message, type, data });
+    const notification = await Notification.create({ recipientId, recipientType, title, message, type, data });
+    const notificationId = String(data?.notificationId || notification?._id || randomUUID());
+    emitNotificationEvent({
+        notificationId,
+        recipientId,
+        recipientType,
+        title,
+        message,
+        type,
+        data: { ...data, notificationId },
+    });
+    return notification;
 };
 
 /**

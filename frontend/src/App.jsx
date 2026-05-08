@@ -115,6 +115,7 @@ import Authentication from "./modules/Admin/pages/firebase/Authentication";
 import RouteWrapper from "./shared/components/RouteWrapper";
 import ScrollToTop from "./shared/components/ScrollToTop";
 import AppBootstrap from "./shared/components/AppBootstrap";
+import FcmManager from "./shared/components/FcmManager";
 
 // Mobile App Routes
 import MobileHome from "./modules/UserApp/pages/Home";
@@ -656,6 +657,7 @@ function App() {
             v7_relativeSplatPath: true,
           }}>
           <AppBootstrap />
+          <FcmManager />
           <ScrollToTop />
           <AppRoutes />
           <CartDrawer />

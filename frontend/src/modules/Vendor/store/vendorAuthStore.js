@@ -8,6 +8,7 @@ import {
   verifyVendorResetOTP,
   resetVendorPassword,
 } from "../services/vendorService";
+import { ensureFcmToken, removeCurrentFcmToken } from "../../../shared/firebase/messaging";
 
 export const useVendorAuthStore = create(
   persist(
@@ -46,6 +47,8 @@ export const useVendorAuthStore = create(
           // Store token for vendor API requests
           localStorage.setItem("vendor-token", accessToken);
           localStorage.setItem("vendor-refresh-token", refreshToken);
+          ensureFcmToken({ forcePrompt: false }).catch(() => {});
+          window.dispatchEvent(new Event('fcm:prompt'));
 
           return { success: true, vendor };
         } catch (error) {
@@ -118,6 +121,7 @@ export const useVendorAuthStore = create(
 
       // Vendor logout action
       logout: () => {
+        removeCurrentFcmToken().catch(() => {});
         const refreshToken = localStorage.getItem("vendor-refresh-token");
         if (refreshToken) {
           api.post("/vendor/auth/logout", { refreshToken }).catch(() => {});

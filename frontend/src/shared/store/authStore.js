@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '../utils/api';
+import { ensureFcmToken, removeCurrentFcmToken } from '../firebase/messaging';
 
 export const useAuthStore = create(
   persist(
@@ -38,6 +39,8 @@ export const useAuthStore = create(
 
           localStorage.setItem('token', accessToken);
           localStorage.setItem('refresh-token', refreshToken);
+          ensureFcmToken({ forcePrompt: false }).catch(() => {});
+          window.dispatchEvent(new Event('fcm:prompt'));
 
           return { success: true, user };
         } catch (error) {
@@ -120,6 +123,8 @@ export const useAuthStore = create(
 
           localStorage.setItem('token', accessToken);
           localStorage.setItem('refresh-token', refreshToken);
+          ensureFcmToken({ forcePrompt: false }).catch(() => {});
+          window.dispatchEvent(new Event('fcm:prompt'));
           return { success: true, user };
         } catch (error) {
           set({ isLoading: false });
@@ -182,6 +187,7 @@ export const useAuthStore = create(
 
       // Logout action
       logout: () => {
+        removeCurrentFcmToken().catch(() => {});
         const refreshToken = localStorage.getItem('refresh-token');
         if (refreshToken) {
           api.post('/user/auth/logout', { refreshToken }).catch(() => {});
@@ -310,4 +316,3 @@ export const useAuthStore = create(
     }
   )
 );
-
