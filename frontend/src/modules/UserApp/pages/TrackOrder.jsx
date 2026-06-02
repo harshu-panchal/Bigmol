@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FiCheckCircle, FiClock, FiPackage, FiTruck, FiMapPin, FiArrowLeft } from 'react-icons/fi';
+import { FiCheckCircle, FiClock, FiPackage, FiTruck, FiMapPin, FiArrowLeft, FiPhone } from 'react-icons/fi';
 import MobileLayout from "../components/Layout/MobileLayout";
 import { useOrderStore } from '../../../shared/store/orderStore';
 import { formatPrice } from '../../../shared/utils/helpers';
@@ -31,19 +31,29 @@ const MobileTrackOrder = () => {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      if (!order && orderId) {
+    const load = async () => {
+      if (orderId) {
         const privateOrder = await fetchOrderById(orderId);
         if (!privateOrder) {
           await fetchPublicTrackingOrder(orderId);
         }
       }
       if (mounted) setIsResolving(false);
-    })();
+    };
+    
+    load();
+
+    // Auto-refresh tracking every 30 seconds if order is shipped
+    let interval;
+    if (order?.status === 'shipped') {
+      interval = setInterval(load, 30000);
+    }
+
     return () => {
       mounted = false;
+      if (interval) clearInterval(interval);
     };
-  }, [order, orderId, fetchOrderById, fetchPublicTrackingOrder]);
+  }, [order?.status, orderId, fetchOrderById, fetchPublicTrackingOrder]);
 
   useEffect(() => {
     if (!isResolving && !order) {
@@ -166,6 +176,60 @@ const MobileTrackOrder = () => {
             </div>
 
             <div className="px-4 py-4 space-y-4">
+              {/* Delivery Partner Card */}
+              {order.deliveryBoyId && normalizedStatus === 'shipped' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-indigo-600 rounded-2xl p-5 text-white shadow-lg shadow-indigo-200"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-14 h-14 bg-white/20 rounded-full overflow-hidden border-2 border-white/30">
+                      {order.deliveryBoyId.avatar ? (
+                        <img 
+                          src={order.deliveryBoyId.avatar.startsWith('http') ? order.deliveryBoyId.avatar : `${import.meta.env.VITE_API_URL}${order.deliveryBoyId.avatar}`} 
+                          className="w-full h-full object-cover" 
+                          alt="Partner"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center font-bold text-lg">
+                          {order.deliveryBoyId.name?.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-indigo-100 font-medium">Your delivery partner</p>
+                      <h3 className="text-lg font-bold">{order.deliveryBoyId.name}</h3>
+                      <p className="text-sm text-indigo-100 italic">{order.deliveryBoyId.vehicleNumber} ({order.deliveryBoyId.vehicleType})</p>
+                    </div>
+                    <a 
+                      href={`tel:${order.deliveryBoyId.phone}`}
+                      className="p-3 bg-white/20 rounded-xl hover:bg-white/30 transition-colors"
+                    >
+                      <FiPhone className="text-xl" />
+                    </a>
+                  </div>
+
+                  <div className="bg-white/10 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <span className="text-sm font-medium">Out for delivery</span>
+                    </div>
+                    {order.deliveryBoyId.currentLocation?.coordinates && (
+                      <button 
+                        onClick={() => {
+                          const [lng, lat] = order.deliveryBoyId.currentLocation.coordinates;
+                          window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                        }}
+                        className="text-xs font-bold bg-white text-indigo-600 px-3 py-1.5 rounded-lg"
+                      >
+                        Track Live
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
               {/* Tracking Timeline */}
               <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-base font-bold text-gray-800 mb-4">Order Status</h2>

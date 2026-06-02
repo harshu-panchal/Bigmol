@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
-import { FiUser, FiMail, FiPhone, FiTruck, FiEdit2, FiSave, FiX, FiLogOut } from 'react-icons/fi';
+import { FiUser, FiMail, FiPhone, FiTruck, FiEdit2, FiSave, FiX, FiLogOut, FiRefreshCw, FiCamera } from 'react-icons/fi';
 import PageTransition from '../../../shared/components/PageTransition';
 import toast from 'react-hot-toast';
 import { formatPrice } from '../../../shared/utils/helpers';
 
 const DeliveryProfile = () => {
   const navigate = useNavigate();
-  const { deliveryBoy, updateProfile, fetchProfile, fetchProfileSummary, isLoading, logout } = useDeliveryAuthStore();
+  const { deliveryBoy, updateProfile, fetchProfile, fetchProfileSummary, updateAvatar, isLoading, logout } = useDeliveryAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [profileMetrics, setProfileMetrics] = useState({
@@ -114,6 +114,25 @@ const DeliveryProfile = () => {
     navigate('/delivery/login');
   };
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await updateAvatar(file);
+      toast.success('Avatar updated successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload avatar');
+    }
+  };
+
+  const handleForceSync = async () => {
+    toast.promise(loadProfile(), {
+      loading: 'Syncing profile data...',
+      success: 'Profile synced!',
+      error: 'Sync failed'
+    });
+  };
+
   const stats = [
     { label: 'Total Deliveries', value: Number(profileMetrics.totalDeliveries || 0) },
     { label: 'Completed Today', value: Number(profileMetrics.completedToday || 0) },
@@ -166,8 +185,23 @@ const DeliveryProfile = () => {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 gradient-green rounded-full flex items-center justify-center text-3xl font-bold">
-              {deliveryBoy?.name?.charAt(0) || 'D'}
+            <div className="relative group">
+              <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-bold overflow-hidden border-2 border-white/30 shadow-lg">
+                {deliveryBoy?.avatar ? (
+                  <img 
+                    src={deliveryBoy.avatar.startsWith('http') ? deliveryBoy.avatar : `${import.meta.env.VITE_API_URL}${deliveryBoy.avatar}`} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.src = ''; e.target.parentElement.innerHTML = deliveryBoy?.name?.charAt(0) || 'D' }}
+                  />
+                ) : (
+                  deliveryBoy?.name?.charAt(0) || 'D'
+                )}
+              </div>
+              <label className="absolute bottom-0 right-0 p-1.5 bg-indigo-500 rounded-full cursor-pointer shadow-lg hover:bg-indigo-600 transition-colors border-2 border-primary-700">
+                <FiCamera className="text-white text-xs" />
+                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
+              </label>
             </div>
             <div>
               <p className="text-xl font-semibold">{deliveryBoy?.name || 'Delivery Boy'}</p>
@@ -176,20 +210,32 @@ const DeliveryProfile = () => {
           </div>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-xl p-4 shadow-sm"
+        {/* Stats Section with Refresh */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-lg font-bold text-gray-800">Performance Summary</h2>
+            <button 
+              onClick={handleForceSync}
+              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold"
             >
-              <p className="text-gray-600 text-sm mb-1">{stat.label}</p>
-              <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-            </motion.div>
-          ))}
+              <FiRefreshCw className={isLoading ? 'animate-spin' : ''} />
+              Sync Data
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {stats.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+              >
+                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-2">{stat.label}</p>
+                <p className="text-xl font-bold text-gray-900">{stat.value}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
 
         {/* Profile Information */}

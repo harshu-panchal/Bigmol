@@ -9,8 +9,11 @@ import SearchSuggestions from '../components/Mobile/SearchSuggestions';
 import { categories as fallbackCategories } from '../../../data/categories';
 import PageTransition from '../../../shared/components/PageTransition';
 import { useCategoryStore } from '../../../shared/store/categoryStore';
+import { useProducts } from '../../../shared/hooks/useCatalog';
+import { useDebounce } from '../../../shared/hooks/useDebounce';
 import toast from 'react-hot-toast';
 import api from '../../../shared/utils/api';
+
 
 const normalizeId = (value) => String(value ?? '').trim();
 
@@ -72,9 +75,8 @@ const MobileSearch = () => {
   });
   const [approvedVendors, setApprovedVendors] = useState([]);
   const [products, setProducts] = useState([]);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+
   const [filters, setFilters] = useState({
     category: searchParams.get('category') || '',
     vendor: searchParams.get('vendor') || '',
@@ -82,6 +84,10 @@ const MobileSearch = () => {
     maxPrice: searchParams.get('maxPrice') || '',
     minRating: searchParams.get('minRating') || '',
   });
+
+  const loadMoreRef = useRef(null);
+  const filterButtonRef = useRef(null);
+
 
   // Sync searchQuery with URL params
   useEffect(() => {
@@ -195,81 +201,60 @@ const MobileSearch = () => {
     return fallbackCategories;
   }, [storeCategories]);
 
-  const buildQueryParams = useCallback(
-    (pageNumber) => {
-      const query = {
-        page: pageNumber,
-        limit: PAGE_SIZE,
-        sort: sortBy || 'newest',
-      };
+  const debouncedFilters = useDebounce(filters, 500);
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-      const q = String(searchParams.get('q') || '').trim();
-      if (q) query.q = q;
+  const queryParams = useMemo(() => {
+    const params = {
+      page: pagination.page,
+      limit: PAGE_SIZE,
+      sort: sortBy || 'newest',
+    };
 
-      if (filters.category) query.category = normalizeId(filters.category);
-      if (filters.vendor) query.vendor = normalizeId(filters.vendor);
-      if (filters.minPrice) query.minPrice = filters.minPrice;
-      if (filters.maxPrice) query.maxPrice = filters.maxPrice;
-      if (filters.minRating) query.minRating = filters.minRating;
+    const q = String(searchParams.get('q') || '').trim();
+    if (q) params.q = q;
 
-      return query;
-    },
-    [filters.category, filters.vendor, filters.minPrice, filters.maxPrice, sortBy, searchParams]
-  );
+    if (debouncedFilters.category) params.category = normalizeId(debouncedFilters.category);
+    if (debouncedFilters.vendor) params.vendor = normalizeId(debouncedFilters.vendor);
+    if (debouncedFilters.minPrice) params.minPrice = debouncedFilters.minPrice;
+    if (debouncedFilters.maxPrice) params.maxPrice = debouncedFilters.maxPrice;
+    if (debouncedFilters.minRating) params.minRating = debouncedFilters.minRating;
 
-  const fetchResults = useCallback(
-    async ({ pageNumber = 1, append = false } = {}) => {
-      const query = buildQueryParams(pageNumber);
-      if (append) {
-        setIsLoadingMore(true);
-      } else {
-        setIsLoadingResults(true);
-      }
+    return params;
+  }, [debouncedFilters, sortBy, searchParams, pagination.page]);
 
-      try {
-        const response = await api.get('/products', { params: query });
-        const payload = response?.data ?? response;
-        const list = Array.isArray(payload?.products)
-          ? payload.products.map(normalizeProduct).filter((item) => item.id)
-          : [];
-        const page = Number(payload?.page || pageNumber || 1);
-        const pages = Number(payload?.pages || 1);
-        const total = Number(payload?.total || list.length || 0);
-
-        setProducts((prev) => (append ? [...prev, ...list] : list));
-        setPagination({ page, pages, total });
-      } catch {
-        if (!append) {
-          setProducts([]);
-          setPagination({ page: 1, pages: 1, total: 0 });
-        }
-      } finally {
-        if (append) {
-          setIsLoadingMore(false);
-        } else {
-          setIsLoadingResults(false);
-        }
-      }
-    },
-    [buildQueryParams]
-  );
+  const { 
+    data, 
+    isLoading: isLoadingResults, 
+    isFetching: isFetchingResults 
+  } = useProducts(queryParams);
 
   useEffect(() => {
-    fetchResults({ pageNumber: 1, append: false });
-  }, [fetchResults, searchParams, sortBy]);
+    if (data) {
+      const payload = data;
+      const list = Array.isArray(payload?.products)
+        ? payload.products.map(normalizeProduct).filter((item) => item.id)
+        : [];
+      const page = Number(payload?.page || 1);
+      const pages = Number(payload?.pages || 1);
+      const total = Number(payload?.total || list.length || 0);
 
-  const filteredProducts = useMemo(() => products, [products]);
-
-  const hasMore = pagination.page < pagination.pages;
-  const loadMoreRef = useRef(null);
+      if (pagination.page === 1) {
+        setProducts(list);
+      } else {
+        setProducts((prev) => [...prev, ...list]);
+      }
+      setPagination({ page, pages, total });
+    }
+  }, [data]);
 
   const loadMore = useCallback(() => {
-    if (isLoadingMore || isLoadingResults || !hasMore) return;
-    fetchResults({ pageNumber: pagination.page + 1, append: true });
-  }, [fetchResults, hasMore, isLoadingMore, isLoadingResults, pagination.page]);
+    if (isLoadingResults || isFetchingResults || pagination.page >= pagination.pages) return;
+    setPagination(prev => ({ ...prev, page: prev.page + 1 }));
+  }, [isLoadingResults, isFetchingResults, pagination.page, pagination.pages]);
 
   useEffect(() => {
-    if (!loadMoreRef.current || !hasMore || isLoadingMore || isLoadingResults) return;
+    if (!loadMoreRef.current || pagination.page >= pagination.pages || isLoadingResults || isFetchingResults) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -283,9 +268,15 @@ const MobileSearch = () => {
 
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [loadMore, hasMore, isLoadingMore, isLoadingResults]);
+  }, [loadMore, pagination.page, pagination.pages, isLoadingResults, isFetchingResults]);
 
-  const filterButtonRef = useRef(null);
+
+  const isFetchingMore = isFetchingResults && pagination.page > 1;
+  const isLoadingInitial = isLoadingResults && pagination.page === 1;
+  const filteredProducts = products;
+  const hasMore = pagination.page < pagination.pages;
+
+
 
   const handleFilterChange = (name, value) => {
     const normalizedValue = typeof value === 'string' ? value.trim() : value;
@@ -714,7 +705,7 @@ const MobileSearch = () => {
 
           {/* Products List */}
           <div className="px-4 py-4 lg:p-6">
-            {isLoadingResults ? (
+            {isLoadingInitial ? (
               <div className="flex items-center justify-center py-12">
                 <div className="flex items-center gap-2 text-gray-600">
                   <motion.div
@@ -754,7 +745,7 @@ const MobileSearch = () => {
 
                 {hasMore && (
                   <div ref={loadMoreRef} className="mt-6 flex flex-col items-center gap-4">
-                    {isLoadingMore && (
+                    {isFetchingMore && (
                       <div className="flex items-center gap-2 text-gray-600">
                         <motion.div
                           animate={{ rotate: 360 }}
@@ -766,10 +757,10 @@ const MobileSearch = () => {
                     )}
                     <button
                       onClick={loadMore}
-                      disabled={isLoadingMore}
+                      disabled={isFetchingMore}
                       className="px-6 py-3 gradient-green text-white rounded-xl font-semibold hover:shadow-glow-green transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isLoadingMore ? (
+                      {isFetchingMore ? (
                         <span className="flex items-center gap-2">
                           <motion.div
                             animate={{ rotate: 360 }}
@@ -797,7 +788,7 @@ const MobileSearch = () => {
 
                 {hasMore && (
                   <div ref={loadMoreRef} className="mt-6 flex flex-col items-center gap-4">
-                    {isLoadingMore && (
+                    {isFetchingMore && (
                       <div className="flex items-center gap-2 text-gray-600">
                         <motion.div
                           animate={{ rotate: 360 }}
@@ -809,10 +800,10 @@ const MobileSearch = () => {
                     )}
                     <button
                       onClick={loadMore}
-                      disabled={isLoadingMore}
+                      disabled={isFetchingMore}
                       className="px-6 py-3 gradient-green text-white rounded-xl font-semibold hover:shadow-glow-green transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isLoadingMore ? (
+                      {isFetchingMore ? (
                         <span className="flex items-center gap-2">
                           <motion.div
                             animate={{ rotate: 360 }}
@@ -829,6 +820,7 @@ const MobileSearch = () => {
                 )}
               </>
             )}
+
           </div>
         </div>
       </MobileLayout>

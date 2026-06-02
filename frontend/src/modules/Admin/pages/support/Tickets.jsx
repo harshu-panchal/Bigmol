@@ -279,10 +279,15 @@ const Tickets = () => {
                               ? 'bg-primary-600 text-white rounded-br-none'
                               : 'bg-gray-100 text-gray-800 rounded-bl-none'
                             }`}>
-                            {msg.message}
+                            <div className="flex flex-col">
+                              <span className={`text-[10px] font-bold mb-1 ${msg.senderType === 'admin' ? 'text-primary-100' : 'text-primary-600'}`}>
+                                {msg.senderName || msg.senderType.toUpperCase()}
+                              </span>
+                              {msg.message}
+                            </div>
                           </div>
                           <span className="text-[10px] text-gray-400 mt-1">
-                            {msg.senderType.toUpperCase()} | {new Date(msg.createdAt).toLocaleTimeString()}
+                            {new Date(msg.createdAt).toLocaleString()}
                           </span>
                         </div>
                       ))}

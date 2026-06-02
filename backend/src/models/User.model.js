@@ -3,15 +3,21 @@ import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema(
     {
+        fcmTokens: [{
+            token: { type: String, trim: true },
+            platform: { type: String, enum: ['web', 'android', 'ios'], default: 'web' },
+            deviceId: { type: String, trim: true },
+            createdAt: { type: Date, default: Date.now },
+        }],
         name: { type: String, required: true, trim: true },
         email: { type: String, required: true, unique: true, lowercase: true, index: true },
         password: { type: String, required: true, select: false },
         phone: { type: String, trim: true },
         avatar: { type: String }, // Cloudinary URL
-        role: { type: String, enum: ['customer', 'delivery'], default: 'customer' },
+        role: { type: String, enum: ['customer', 'delivery'], default: 'customer', index: true },
         userType: { type: String, enum: ['retailer', 'wholesaler'], default: 'retailer' },
         isVerified: { type: Boolean, default: false },
-        isActive: { type: Boolean, default: true },
+        isActive: { type: Boolean, default: true, index: true },
         otp: { type: String, select: false },
         otpExpiry: { type: Date, select: false },
         resetOtp: { type: String, select: false },
@@ -21,6 +27,7 @@ const userSchema = new mongoose.Schema(
         refreshTokenExpiresAt: { type: Date, select: false },
         passwordResetToken: { type: String, select: false },
         passwordResetExpiry: { type: Date, select: false },
+        deliveryOtp: { type: String },
     },
     { timestamps: true }
 );

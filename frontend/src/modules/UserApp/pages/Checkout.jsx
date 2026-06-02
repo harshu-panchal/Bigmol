@@ -43,7 +43,7 @@ const MobileCheckout = () => {
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [shippingOption, setShippingOption] = useState("standard");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  
+
   // Payment & Address Form State
   const [paymentMethod, setPaymentMethod] = useState("online");
   const [selectedEMIProvider, setSelectedEMIProvider] = useState("snapmint");
@@ -105,18 +105,29 @@ const MobileCheckout = () => {
 
   const handlePlaceOrder = async (e) => {
     if (e) e.preventDefault();
-    if (!shippingAddress) return toast.error("Please select an address");
     if (isPlacingOrder) return;
+
+    // Frontend validation before API call
+    if (!items || items.length === 0) {
+      return toast.error("Your cart is empty");
+    }
+
+    if (!shippingAddress || !shippingAddress.address) {
+      return toast.error("Please select a delivery address");
+    }
+
+    if (!paymentMethod) {
+      return toast.error("Please select a payment method");
+    }
 
     setIsPlacingOrder(true);
     try {
       const orderData = {
-        items: items.map(i => ({ 
-          id: i.id,
-          productId: i.id, 
-          quantity: i.quantity, 
+        items: items.map(i => ({
+          productId: i.productId || i.id,
+          quantity: Number(i.quantity || 1),
           variant: i.variant,
-          price: i.price,
+          price: Number(i.price || 0),
           name: i.name,
           image: i.image
         })),
@@ -131,24 +142,30 @@ const MobileCheckout = () => {
           email: (user?.email || "").trim()
         },
         paymentMethod,
+        totalAmount: Number(finalTotal || 0),
         shippingOption,
         couponCode: appliedCoupon?.code,
         emiDetails: paymentMethod === 'emi' ? {
-          provider: selectedEMIProvider,
-          tenure: selectedEMITenure,
-          installment: emiInstallment
+          provider: String(selectedEMIProvider || "").toLowerCase(),
+          tenure: Number(selectedEMITenure || 0),
+          installment: Number(emiInstallment || 0)
         } : undefined,
-        downPaymentAmount: downPayment
+        downPaymentAmount: Number(downPayment || 0)
       };
 
-      console.log("FINAL_ORDER_PAYLOAD:", JSON.stringify(orderData, null, 2));
-      
+      console.log("SENDING_ORDER_PAYLOAD:", JSON.stringify(orderData, null, 2));
+
       const order = await createOrder(orderData);
-      
+
       if (paymentMethod === 'cod') {
         clearCart();
         navigate(`/order-confirmation/${order.orderId || order.id}`);
         return;
+      }
+
+      if (!order.razorpayOrderId && paymentMethod !== 'cod') {
+        console.error("RAZORPAY_ORDER_ID_MISSING:", order);
+        throw new Error("Failed to initialize payment gateway. Please try again.");
       }
 
       const options = {
@@ -165,13 +182,20 @@ const MobileCheckout = () => {
         },
         theme: { color: "#10b981" },
         handler: async (res) => {
+          console.log("RAZORPAY_RESPONSE:", res);
           try {
-            await api.post("/user/payments/verify", { ...res, orderId: order.orderId || order.id });
+            await api.post("/user/payments/verify", { 
+              razorpay_order_id: res.razorpay_order_id,
+              razorpay_payment_id: res.razorpay_payment_id,
+              razorpay_signature: res.razorpay_signature,
+              orderId: order.orderId || order.id 
+            });
             clearCart();
             toast.success("Payment Received!");
             navigate(`/order-confirmation/${order.orderId || order.id}`);
           } catch (err) {
-            toast.error("Verification failed");
+            console.error("VERIFICATION_ERROR:", err.response?.data || err.message);
+            toast.error(err.response?.data?.message || "Payment verification failed");
           }
         },
         modal: { ondismiss: () => setIsPlacingOrder(false) }
@@ -180,13 +204,17 @@ const MobileCheckout = () => {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      console.error("ORDER_PLACEMENT_ERROR:", err);
-      const errorMsg = err?.response?.data?.message || err?.message || "Order failed";
+      console.error("ORDER_PLACEMENT_ERROR:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Order placement failed";
       toast.error(errorMsg);
       setIsPlacingOrder(false);
     }
   };
-  
+
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     setIsApplyingCoupon(true);
@@ -207,7 +235,7 @@ const MobileCheckout = () => {
     if (!formData.fullName || !formData.address || !formData.phone || !formData.city) {
       return toast.error("Please fill all required fields");
     }
-    
+
     setIsSavingAddress(true);
     try {
       await addAddress({
@@ -234,7 +262,7 @@ const MobileCheckout = () => {
       <MobileLayout title="Checkout" showBack backLink="/cart" showBottomNav={false} showCartBar={false}>
         <div className="pb-32 px-4 pt-4 bg-gray-50 min-h-screen">
           <form onSubmit={handlePlaceOrder} className="space-y-6 max-w-2xl mx-auto">
-            
+
             <div className="flex items-center justify-between px-6 mb-10 mt-2">
               {[
                 { n: 1, label: "Address" },
@@ -284,7 +312,7 @@ const MobileCheckout = () => {
               </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 pb-32">
-                
+
                 {/* Product Preview in Payment Step */}
                 <div className="bg-white rounded-3xl p-1 shadow-sm border border-gray-100 overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
@@ -293,7 +321,7 @@ const MobileCheckout = () => {
                       {items.length} {items.length === 1 ? 'Item' : 'Items'}
                     </span>
                   </div>
-                  <OrderSummary 
+                  <OrderSummary
                     itemsByVendor={itemsByVendor}
                     total={subtotal}
                     discount={appliedDiscount}
@@ -325,9 +353,9 @@ const MobileCheckout = () => {
                             <div key={p.id} onClick={() => setSelectedEMIProvider(p.id)} className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all cursor-pointer ${selectedEMIProvider === p.id ? "border-primary-500 bg-primary-50/50" : "border-gray-50 bg-white"}`}>
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200">
-                                  <img 
-                                    src={p.icon} 
-                                    alt={p.name} 
+                                  <img
+                                    src={p.icon}
+                                    alt={p.name}
                                     className="w-full h-full object-contain"
                                     onError={(e) => {
                                       e.target.style.display = 'none';
@@ -410,67 +438,67 @@ const MobileCheckout = () => {
         <AnimatePresence>
           {showAddressForm && (
             <div className="fixed inset-0 bg-black/70 z-[10000] flex items-end sm:items-center sm:justify-center p-0 sm:p-4" onClick={() => setShowAddressForm(false)}>
-              <motion.div 
-                initial={{ y: "100%" }} 
-                animate={{ y: 0 }} 
-                exit={{ y: "100%" }} 
-                onClick={e => e.stopPropagation()} 
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                onClick={e => e.stopPropagation()}
                 className="bg-white w-full max-w-lg rounded-t-[2.5rem] sm:rounded-3xl p-8 space-y-5 shadow-2xl relative"
               >
-                 <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-2 sm:hidden" />
-                 <div className="flex justify-between items-center">
-                   <h3 className="font-extrabold text-2xl text-gray-800">New Address</h3>
-                   <button onClick={() => setShowAddressForm(false)} className="p-2 bg-gray-100 rounded-full text-gray-400"><FiX /></button>
-                 </div>
-                 
-                 <div className="space-y-4">
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Save As (Label)</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Home, Office..." value={formData.label} onChange={e => setFormData({...formData, label: e.target.value})} />
-                     </div>
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Full Name</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Enter recipient name" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
-                     </div>
-                   </div>
-                   
-                   <div className="space-y-2">
-                     <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Complete Address</label>
-                     <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="House no, Building, Area" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-                   </div>
+                <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-2 sm:hidden" />
+                <div className="flex justify-between items-center">
+                  <h3 className="font-extrabold text-2xl text-gray-800">New Address</h3>
+                  <button onClick={() => setShowAddressForm(false)} className="p-2 bg-gray-100 rounded-full text-gray-400"><FiX /></button>
+                </div>
 
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">City</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="City" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
-                     </div>
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Phone Number</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Phone" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                     </div>
-                   </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Save As (Label)</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Home, Office..." value={formData.label} onChange={e => setFormData({ ...formData, label: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Full Name</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Enter recipient name" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} />
+                    </div>
+                  </div>
 
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">State</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="State" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
-                     </div>
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Zip Code</label>
-                        <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Zip" value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} />
-                     </div>
-                   </div>
-                 </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Complete Address</label>
+                    <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="House no, Building, Area" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
+                  </div>
 
-                 <button 
-                  type="button" 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">City</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="City" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Phone Number</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Phone" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">State</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="State" value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 ml-1 uppercase">Zip Code</label>
+                      <input className="w-full p-4 bg-gray-50 rounded-2xl border border-transparent focus:border-primary-500 transition-all outline-none" placeholder="Zip" value={formData.zipCode} onChange={e => setFormData({ ...formData, zipCode: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
                   disabled={isSavingAddress}
-                  onClick={handleSaveAddress} 
+                  onClick={handleSaveAddress}
                   className="w-full py-4 gradient-green text-white rounded-2xl font-black shadow-glow-green transform active:scale-95 transition-all"
-                 >
-                   {isSavingAddress ? "Saving..." : "Save Address"}
-                 </button>
+                >
+                  {isSavingAddress ? "Saving..." : "Save Address"}
+                </button>
               </motion.div>
             </div>
           )}

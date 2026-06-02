@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiSearch, FiX, FiClock } from 'react-icons/fi';
 import { getCatalogProducts } from '../../data/catalogData';
+import { useDebounce } from '../../../../shared/hooks/useDebounce';
 import api from '../../../../shared/utils/api';
+
 
 const SearchSuggestions = ({
   query,
@@ -32,18 +34,20 @@ const SearchSuggestions = ({
     };
   }, [isOpen, onClose]);
 
+  const debouncedQuery = useDebounce(trimmedQuery, 400);
+
   useEffect(() => {
     let cancelled = false;
 
     const fetchSuggestions = async () => {
-      if (!isOpen || !trimmedQuery) {
+      if (!isOpen || !debouncedQuery) {
         setSuggestions([]);
         return;
       }
 
       try {
         const response = await api.get('/products', {
-          params: { q: trimmedQuery, page: 1, limit: 5, sort: 'newest' },
+          params: { q: debouncedQuery, page: 1, limit: 5, sort: 'newest' },
         });
         const payload = response?.data ?? response;
         const products = Array.isArray(payload?.products) ? payload.products : [];
@@ -60,7 +64,7 @@ const SearchSuggestions = ({
         if (cancelled) return;
         const fallback = getCatalogProducts()
           .filter((product) =>
-            String(product?.name || '').toLowerCase().includes(trimmedQuery.toLowerCase())
+            String(product?.name || '').toLowerCase().includes(debouncedQuery.toLowerCase())
           )
           .slice(0, 5);
         setSuggestions(fallback);
@@ -71,7 +75,8 @@ const SearchSuggestions = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, trimmedQuery]);
+  }, [isOpen, debouncedQuery]);
+
 
   if (!isOpen) return null;
 

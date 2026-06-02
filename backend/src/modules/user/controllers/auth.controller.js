@@ -66,11 +66,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     user.isVerified = true;
     user.otp = undefined;
     user.otpExpiry = undefined;
+    user.deliveryOtp = String(Math.floor(100000 + Math.random() * 900000));
     await user.save();
 
     const { accessToken, refreshToken } = generateTokens({ id: user._id, role: 'customer', email: user.email, userType: user.userType });
     await persistRefreshSession(user, refreshToken);
-    res.status(200).json(new ApiResponse(200, { accessToken, refreshToken, user: { id: user._id, name: user.name, email: user.email, userType: user.userType } }, 'Email verified successfully.'));
+    res.status(200).json(new ApiResponse(200, { accessToken, refreshToken, user: { id: user._id, name: user.name, email: user.email, userType: user.userType, deliveryOtp: user.deliveryOtp } }, 'Email verified successfully.'));
 });
 
 // POST /api/user/auth/login
@@ -89,9 +90,12 @@ export const login = asyncHandler(async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) throw new ApiError(401, 'Invalid email or password.');
 
+    user.deliveryOtp = String(Math.floor(100000 + Math.random() * 900000));
+    await user.save();
+
     const { accessToken, refreshToken } = generateTokens({ id: user._id, role: 'customer', email: user.email, userType: user.userType });
     await persistRefreshSession(user, refreshToken);
-    res.status(200).json(new ApiResponse(200, { accessToken, refreshToken, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar, userType: user.userType } }, 'Login successful.'));
+    res.status(200).json(new ApiResponse(200, { accessToken, refreshToken, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar, userType: user.userType, deliveryOtp: user.deliveryOtp } }, 'Login successful.'));
 });
 
 // POST /api/user/auth/refresh

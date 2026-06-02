@@ -13,6 +13,9 @@ import * as reportController from '../controllers/report.controller.js';
 import * as marketingController from '../controllers/marketing.controller.js';
 import * as notificationController from '../controllers/notification.controller.js';
 import * as uploadController from '../controllers/upload.controller.js';
+import * as policyController from '../controllers/policy.controller.js';
+import * as settingController from '../controllers/setting.controller.js';
+
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
 import { authLimiter } from '../../../middlewares/rateLimiter.js';
@@ -81,9 +84,15 @@ router.get('/analytics/recent-orders', ...adminAuth, analyticsController.getRece
 router.get('/analytics/sales', ...adminAuth, analyticsController.getSalesData);
 router.get('/analytics/finance-summary', ...adminAuth, analyticsController.getFinancialSummary);
 router.get('/analytics/inventory-stats', ...adminAuth, analyticsController.getInventoryStats);
+router.get('/analytics/profit-loss', ...adminAuth, analyticsController.getProfitLoss);
+router.get('/analytics/order-trends', ...adminAuth, analyticsController.getOrderTrends);
+router.get('/analytics/payment-breakdown', ...adminAuth, analyticsController.getPaymentBreakdown);
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 router.get('/orders', ...adminAuth, orderController.getAllOrders);
+router.patch('/orders/bulk-status', ...adminAuth, orderController.bulkUpdateOrderStatus);
+router.delete('/orders/bulk-delete', ...adminAuth, orderController.bulkDeleteOrders);
+
 router.get('/orders/:id', ...adminAuth, orderController.getOrderById);
 router.patch('/orders/:id/status', ...adminAuth, orderController.updateOrderStatus);
 router.patch('/orders/:id/assign-delivery', ...adminAuth, orderController.assignDeliveryBoy);
@@ -139,11 +148,14 @@ router.delete('/delivery-boys/:id', ...adminAuth, validate(deliveryBoyIdParamSch
 router.patch('/delivery-boys/:id/status', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(updateDeliveryStatusSchema), deliveryController.updateDeliveryBoyStatus);
 router.patch('/delivery-boys/:id/application-status', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(updateDeliveryApplicationStatusSchema), deliveryController.updateDeliveryBoyApplicationStatus);
 router.post('/delivery-boys/:id/settle-cash', ...adminAuth, validate(deliveryBoyIdParamSchema, 'params'), validate(settleCashSchema), deliveryController.settleCash);
+router.post('/delivery-boys/:id/assign-order', ...adminAuth, deliveryController.assignOrder);
+router.delete('/delivery-boys/:id/unassign-order/:orderId', ...adminAuth, deliveryController.unassignOrder);
 
 // ─── Return Requests ──────────────────────────────────────────────────────────
 router.get('/return-requests', ...adminAuth, returnController.getAllReturnRequests);
 router.get('/return-requests/:id', ...adminAuth, returnController.getReturnRequestById);
 router.patch('/return-requests/:id/status', ...adminAuth, returnController.updateReturnRequestStatus);
+router.patch('/return-requests/:id/assign-delivery', ...adminAuth, returnController.assignDeliveryBoyForPickup);
 
 // ─── Support Tickets ──────────────────────────────────────────────────────────
 router.get('/support/tickets', ...adminAuth, supportController.getAllTickets);
@@ -185,9 +197,18 @@ router.delete('/marketing/campaigns/:id', ...adminAuth, validate(marketingIdPara
 router.get('/reports/sales', ...adminAuth, reportController.getSalesReport);
 router.get('/reports/inventory', ...adminAuth, reportController.getInventoryReport);
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+router.get('/settings', ...adminAuth, settingController.getSettings);
+router.put('/settings', ...adminAuth, settingController.updateSettings);
+
+
 // ─── Notifications ─────────────────────────────────────────────────────────────
 router.get('/notifications', ...adminAuth, notificationController.getAdminNotifications);
 router.put('/notifications/:id/read', ...adminAuth, notificationController.markAsRead);
 router.put('/notifications/read-all', ...adminAuth, notificationController.markAllAsRead);
+
+// ─── Policies ─────────────────────────────────────────────────────────────────
+router.get('/policies/:type', ...adminAuth, policyController.getPolicy);
+router.put('/policies/:type', ...adminAuth, policyController.updatePolicy);
 
 export default router;

@@ -86,6 +86,8 @@ router.get('/notifications', ...vendorAuth, notificationController.getVendorNoti
 router.put('/notifications/:id/read', ...vendorAuth, notificationController.markVendorNotificationAsRead);
 router.put('/notifications/read-all', ...vendorAuth, notificationController.markAllVendorNotificationsAsRead);
 router.delete('/notifications/:id', ...vendorAuth, notificationController.deleteVendorNotification);
+router.post('/notifications/fcm-token', ...vendorAuth, notificationController.registerVendorFcmToken);
+router.delete('/notifications/fcm-token', ...vendorAuth, notificationController.removeVendorFcmToken);
 
 // Inventory reports
 router.get('/inventory/reports', ...vendorAuth, inventoryController.getInventoryReport);

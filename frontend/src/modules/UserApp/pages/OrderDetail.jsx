@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FiPackage, FiTruck, FiMapPin, FiCreditCard, FiRotateCw, FiArrowLeft, FiShoppingBag, FiX } from 'react-icons/fi';
+import { FiPackage, FiTruck, FiMapPin, FiCreditCard, FiRotateCw, FiArrowLeft, FiShoppingBag, FiX, FiShield } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import MobileLayout from "../components/Layout/MobileLayout";
 import { useOrderStore } from '../../../shared/store/orderStore';
@@ -171,295 +171,316 @@ const MobileOrderDetail = () => {
   return (
     <PageTransition>
       <MobileLayout showBottomNav={false} showCartBar={true}>
-          <div className="w-full pb-24">
-            {/* Header */}
-            <div className="px-4 py-4 bg-white border-b border-gray-200 sticky top-1 z-30">
-              <div className="flex items-center gap-3 mb-3">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <FiArrowLeft className="text-xl text-gray-700" />
-                </button>
-                <div className="flex-1">
-                  <h1 className="text-xl font-bold text-gray-800">Order Details</h1>
-                  <p className="text-sm text-gray-600">Order #{order.id}</p>
-                </div>
-                <Badge variant={order.status}>{order.status.toUpperCase()}</Badge>
+        <div className="w-full pb-24">
+          {/* Header */}
+          <div className="px-4 py-4 bg-white border-b border-gray-200 sticky top-1 z-30">
+            <div className="flex items-center gap-3 mb-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <FiArrowLeft className="text-xl text-gray-700" />
+              </button>
+              <div className="flex-1">
+                <h1 className="text-xl font-bold text-gray-800">Order Details</h1>
+                <p className="text-sm text-gray-600">Order #{order.id}</p>
               </div>
-            </div>
-
-            <div className="px-4 py-4 space-y-4">
-              {/* Order Items */}
-              <div className="glass-card rounded-2xl p-4">
-                <h2 className="text-base font-bold text-gray-800 mb-4">Order Items</h2>
-                {order.vendorItems && order.vendorItems.length > 0 ? (
-                  <div className="space-y-4">
-                    {order.vendorItems.map((vendorGroup) => (
-                      <div key={vendorGroup.vendorId} className="space-y-2">
-                        {/* Vendor Header */}
-                        <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg border border-primary-200/50">
-                          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center flex-shrink-0">
-                            <FiShoppingBag className="text-white text-[10px]" />
-                          </div>
-                          <span className="text-sm font-bold text-primary-700 flex-1">
-                            {vendorGroup.vendorName}
-                          </span>
-                          <span className="text-xs font-semibold text-primary-600 bg-white px-2 py-0.5 rounded-md">
-                            {formatPrice(vendorGroup.subtotal)}
-                          </span>
-                        </div>
-                        {/* Vendor Items */}
-                        <div className="space-y-2 pl-2">
-                          {vendorGroup.items.map((item, itemIndex) => (
-                            <div key={`${item.id}-${itemIndex}-${getVariantSignature(item?.variant || {})}`} className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                                <LazyImage
-                                  src={item.image}
-                                  alt={item.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-gray-800 text-sm mb-1">{item.name}</h3>
-                                <p className="text-xs text-gray-600">
-                                  {formatPrice(item.price)} x {item.quantity}
-                                </p>
-                                {formatVariantLabel(item?.variant) && (
-                                  <p className="text-[11px] text-gray-500">
-                                    {formatVariantLabel(item?.variant)}
-                                  </p>
-                                )}
-                              </div>
-                              <p className="font-bold text-gray-800 text-sm">
-                                {formatPrice(item.price * item.quantity)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {orderItems.map((item, itemIndex) => (
-                      <div key={`${item.id}-${itemIndex}-${getVariantSignature(item?.variant || {})}`} className="flex items-center gap-3">
-                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                          <LazyImage
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-800 text-sm mb-1">{item.name}</h3>
-                          <p className="text-xs text-gray-600">
-                            {formatPrice(item.price)} x {item.quantity}
-                          </p>
-                          {formatVariantLabel(item?.variant) && (
-                                  <p className="text-[11px] text-gray-500">
-                                    {formatVariantLabel(item?.variant)}
-                                  </p>
-                                )}
-                        </div>
-                        <p className="font-bold text-gray-800 text-sm">
-                          {formatPrice(item.price * item.quantity)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Shipping Address */}
-              <div className="glass-card rounded-2xl p-4">
-                <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <FiMapPin className="text-primary-600" />
-                  Shipping Address
-                </h2>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p className="font-semibold text-gray-800">{shippingAddress.name || 'N/A'}</p>
-                  <p>{shippingAddress.address || 'N/A'}</p>
-                  <p>
-                    {shippingAddress.city || 'N/A'}, {shippingAddress.state || 'N/A'}{' '}
-                    {shippingAddress.zipCode || 'N/A'}
-                  </p>
-                  <p>{shippingAddress.country || 'N/A'}</p>
-                  <p className="mt-2">Phone: {shippingAddress.phone || 'N/A'}</p>
-                </div>
-              </div>
-
-              {/* Payment Info */}
-              <div className="glass-card rounded-2xl p-4">
-                <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <FiCreditCard className="text-primary-600" />
-                  Payment Information
-                </h2>
-                <div className="text-sm text-gray-600 space-y-2">
-                  <div className="flex justify-between">
-                    <span>Payment Method:</span>
-                    <span className="font-semibold text-gray-800 capitalize">
-                      {order.paymentMethod === 'emi' ? `EMI (${order.emiDetails?.provider || 'Provider'})` : order.paymentMethod}
-                    </span>
-                  </div>
-                  {order.downPaymentAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>Down Payment:</span>
-                      <span className="font-semibold text-gray-800">{formatPrice(order.downPaymentAmount)}</span>
-                    </div>
-                  )}
-                  {order.trackingNumber && (
-                    <div className="flex justify-between">
-                      <span>Tracking Number:</span>
-                      <span className="font-semibold text-gray-800">{order.trackingNumber}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Order Date:</span>
-                    <span className="font-semibold text-gray-800">{formatDate(order.date)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Order Summary */}
-              <div className="glass-card rounded-2xl p-4">
-                <h2 className="text-base font-bold text-gray-800 mb-3">Order Summary</h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(order.subtotal)}</span>
-                  </div>
-                  {order.discount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-{formatPrice(order.discount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-gray-600">
-                    <span>Shipping</span>
-                    <span>{formatPrice(order.shipping)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Tax</span>
-                    <span>{formatPrice(order.tax)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t border-gray-200">
-                    <span>Total</span>
-                    <span className="text-primary-600">{formatPrice(order.total)}</span>
-                  </div>
-                  {order.paymentMethod === 'emi' && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded text-[10px] text-gray-500 italic">
-                      Note: Total reflects the full order value. EMI schedules are managed by {order.emiDetails?.provider || 'the provider'}.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-2">
-                {['pending', 'processing'].includes(order.status) && (
-                  <button
-                    onClick={handleCancel}
-                    className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-semibold hover:bg-red-100 transition-colors"
-                  >
-                    Cancel Order
-                  </button>
-                )}
-                <button
-                  onClick={handleReorder}
-                  className="w-full py-3 gradient-green text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-glow-green transition-all"
-                >
-                  <FiRotateCw className="text-lg" />
-                  Reorder
-                </button>
-                {order.status === 'delivered' && (
-                  <button
-                    onClick={openReturnModal}
-                    className="w-full py-3 bg-amber-50 text-amber-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors"
-                  >
-                    <FiPackage className="text-lg" />
-                    Request Return
-                  </button>
-                )}
-                <button
-                  onClick={() => navigate(`/track-order/${order.id}`)}
-                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors"
-                >
-                  <FiTruck className="text-lg" />
-                  Track Order
-                </button>
-              </div>
+              <Badge variant={order.status}>{order.status.toUpperCase()}</Badge>
             </div>
           </div>
 
-          {showReturnModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center sm:justify-center"
-              onClick={() => setShowReturnModal(false)}
-            >
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-4 sm:p-5"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-800">Request Return</h3>
-                  <button
-                    onClick={() => setShowReturnModal(false)}
-                    className="p-2 rounded-full hover:bg-gray-100"
-                  >
-                    <FiX className="text-gray-600" />
-                  </button>
+          <div className="px-4 py-4 space-y-4">
+            {/* Delivery Verification Code */}
+            {order.status === 'shipped' && order.userId?.deliveryOtp && (
+              <div className="glass-card rounded-2xl p-4 bg-gradient-to-br from-primary-50 to-white border border-primary-100 overflow-hidden relative">
+                <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary-500/5 rounded-full blur-2xl" />
+                <h2 className="text-base font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <FiShield className="text-primary-600" />
+                  Delivery Code
+                </h2>
+                <p className="text-[11px] text-gray-600 mb-3">
+                  Share this 6-digit code with the delivery partner to verify and complete your delivery.
+                </p>
+                <div className="flex justify-center">
+                  <div className="bg-white border-2 border-dashed border-primary-200 rounded-xl px-8 py-3 shadow-sm">
+                    <span className="text-3xl font-black tracking-[0.3em] text-primary-600 font-mono">
+                      {order.userId.deliveryOtp}
+                    </span>
+                  </div>
                 </div>
+              </div>
+            )}
 
-                {vendorOptions.length > 1 && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Select Vendor
-                    </label>
-                    <select
-                      value={returnVendorId}
-                      onChange={(e) => setReturnVendorId(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Choose vendor</option>
-                      {vendorOptions.map((vendor) => (
-                        <option key={vendor.id} value={vendor.id}>
-                          {vendor.name}
-                        </option>
-                      ))}
-                    </select>
+            {/* Order Items */}
+            <div className="glass-card rounded-2xl p-4">
+              <h2 className="text-base font-bold text-gray-800 mb-4">Order Items</h2>
+              {order.vendorItems && order.vendorItems.length > 0 ? (
+                <div className="space-y-4">
+                  {order.vendorItems.map((vendorGroup) => (
+                    <div key={vendorGroup.vendorId} className="space-y-2">
+                      {/* Vendor Header */}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg border border-primary-200/50">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center flex-shrink-0">
+                          <FiShoppingBag className="text-white text-[10px]" />
+                        </div>
+                        <span className="text-sm font-bold text-primary-700 flex-1">
+                          {vendorGroup.vendorName}
+                        </span>
+                        <span className="text-xs font-semibold text-primary-600 bg-white px-2 py-0.5 rounded-md">
+                          {formatPrice(vendorGroup.subtotal)}
+                        </span>
+                      </div>
+                      {/* Vendor Items */}
+                      <div className="space-y-2 pl-2">
+                        {vendorGroup.items.map((item, itemIndex) => (
+                          <div key={`${item.id}-${itemIndex}-${getVariantSignature(item?.variant || {})}`} className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                              <LazyImage
+                                src={item.image}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-gray-800 text-sm mb-1">{item.name}</h3>
+                              <p className="text-xs text-gray-600">
+                                {formatPrice(item.price)} x {item.quantity}
+                              </p>
+                              {formatVariantLabel(item?.variant) && (
+                                <p className="text-[11px] text-gray-500">
+                                  {formatVariantLabel(item?.variant)}
+                                </p>
+                              )}
+                            </div>
+                            <p className="font-bold text-gray-800 text-sm">
+                              {formatPrice(item.price * item.quantity)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderItems.map((item, itemIndex) => (
+                    <div key={`${item.id}-${itemIndex}-${getVariantSignature(item?.variant || {})}`} className="flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                        <LazyImage
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-800 text-sm mb-1">{item.name}</h3>
+                        <p className="text-xs text-gray-600">
+                          {formatPrice(item.price)} x {item.quantity}
+                        </p>
+                        {formatVariantLabel(item?.variant) && (
+                          <p className="text-[11px] text-gray-500">
+                            {formatVariantLabel(item?.variant)}
+                          </p>
+                        )}
+                      </div>
+                      <p className="font-bold text-gray-800 text-sm">
+                        {formatPrice(item.price * item.quantity)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Shipping Address */}
+            <div className="glass-card rounded-2xl p-4">
+              <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <FiMapPin className="text-primary-600" />
+                Shipping Address
+              </h2>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p className="font-semibold text-gray-800">{shippingAddress.name || 'N/A'}</p>
+                <p>{shippingAddress.address || 'N/A'}</p>
+                <p>
+                  {shippingAddress.city || 'N/A'}, {shippingAddress.state || 'N/A'}{' '}
+                  {shippingAddress.zipCode || 'N/A'}
+                </p>
+                <p>{shippingAddress.country || 'N/A'}</p>
+                <p className="mt-2">Phone: {shippingAddress.phone || 'N/A'}</p>
+              </div>
+            </div>
+
+            {/* Payment Info */}
+            <div className="glass-card rounded-2xl p-4">
+              <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <FiCreditCard className="text-primary-600" />
+                Payment Information
+              </h2>
+              <div className="text-sm text-gray-600 space-y-2">
+                <div className="flex justify-between">
+                  <span>Payment Method:</span>
+                  <span className="font-semibold text-gray-800 capitalize">
+                    {order.paymentMethod === 'emi' ? `EMI (${order.emiDetails?.provider || 'Provider'})` : order.paymentMethod}
+                  </span>
+                </div>
+                {order.downPaymentAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Down Payment:</span>
+                    <span className="font-semibold text-gray-800">{formatPrice(order.downPaymentAmount)}</span>
                   </div>
                 )}
+                {order.trackingNumber && (
+                  <div className="flex justify-between">
+                    <span>Tracking Number:</span>
+                    <span className="font-semibold text-gray-800">{order.trackingNumber}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span>Order Date:</span>
+                  <span className="font-semibold text-gray-800">{formatDate(order.date)}</span>
+                </div>
+              </div>
+            </div>
 
+            {/* Order Summary */}
+            <div className="glass-card rounded-2xl p-4">
+              <h2 className="text-base font-bold text-gray-800 mb-3">Order Summary</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal</span>
+                  <span>{formatPrice(order.subtotal)}</span>
+                </div>
+                {order.discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount</span>
+                    <span>-{formatPrice(order.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-600">
+                  <span>Shipping</span>
+                  <span>{formatPrice(order.shipping)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Tax</span>
+                  <span>{formatPrice(order.tax)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t border-gray-200">
+                  <span>Total</span>
+                  <span className="text-primary-600">{formatPrice(order.total)}</span>
+                </div>
+                {order.paymentMethod === 'emi' && (
+                  <div className="mt-2 p-2 bg-gray-50 rounded text-[10px] text-gray-500 italic">
+                    Note: Total reflects the full order value. EMI schedules are managed by {order.emiDetails?.provider || 'the provider'}.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2">
+              {['pending', 'processing'].includes(order.status) && (
+                <button
+                  onClick={handleCancel}
+                  className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-semibold hover:bg-red-100 transition-colors"
+                >
+                  Cancel Order
+                </button>
+              )}
+              <button
+                onClick={handleReorder}
+                className="w-full py-3 gradient-green text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-glow-green transition-all"
+              >
+                <FiRotateCw className="text-lg" />
+                Reorder
+              </button>
+              {order.status === 'delivered' && (
+                <button
+                  onClick={openReturnModal}
+                  className="w-full py-3 bg-amber-50 text-amber-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors"
+                >
+                  <FiPackage className="text-lg" />
+                  Request Return
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/track-order/${order.id}`)}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors"
+              >
+                <FiTruck className="text-lg" />
+                Track Order
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {showReturnModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center sm:justify-center"
+            onClick={() => setShowReturnModal(false)}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-4 sm:p-5"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-800">Request Return</h3>
+                <button
+                  onClick={() => setShowReturnModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-100"
+                >
+                  <FiX className="text-gray-600" />
+                </button>
+              </div>
+
+              {vendorOptions.length > 1 && (
                 <div className="mb-4">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Reason
+                    Select Vendor
                   </label>
-                  <textarea
-                    value={returnReason}
-                    onChange={(e) => setReturnReason(e.target.value)}
-                    rows={3}
+                  <select
+                    value={returnVendorId}
+                    onChange={(e) => setReturnVendorId(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="Describe the issue briefly"
-                  />
+                  >
+                    <option value="">Choose vendor</option>
+                    {vendorOptions.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              )}
 
-                <button
-                  onClick={handleRequestReturn}
-                  disabled={isSubmittingReturn}
-                  className="w-full py-3 gradient-green text-white rounded-xl font-semibold disabled:opacity-70"
-                >
-                  {isSubmittingReturn ? 'Submitting...' : 'Submit Return Request'}
-                </button>
-              </motion.div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Reason
+                </label>
+                <textarea
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Describe the issue briefly"
+                />
+              </div>
+
+              <button
+                onClick={handleRequestReturn}
+                disabled={isSubmittingReturn}
+                className="w-full py-3 gradient-green text-white rounded-xl font-semibold disabled:opacity-70"
+              >
+                {isSubmittingReturn ? 'Submitting...' : 'Submit Return Request'}
+              </button>
             </motion.div>
-          )}
+          </motion.div>
+        )}
       </MobileLayout>
     </PageTransition>
   );

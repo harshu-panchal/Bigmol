@@ -4,7 +4,21 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from "react-hot-toast";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 
 import CartDrawer from "./shared/components/Cart/CartDrawer";
 import ProtectedRoute from "./shared/components/Auth/ProtectedRoute";
@@ -101,6 +115,7 @@ import Authentication from "./modules/Admin/pages/firebase/Authentication";
 import RouteWrapper from "./shared/components/RouteWrapper";
 import ScrollToTop from "./shared/components/ScrollToTop";
 import AppBootstrap from "./shared/components/AppBootstrap";
+import FcmManager from "./shared/components/FcmManager";
 
 // Mobile App Routes
 import MobileHome from "./modules/UserApp/pages/Home";
@@ -142,6 +157,7 @@ import DeliveryOrders from "./modules/Delivery/pages/Orders";
 import DeliveryOrderDetail from "./modules/Delivery/pages/OrderDetail";
 import DeliveryProfile from "./modules/Delivery/pages/Profile";
 import DeliveryNotifications from "./modules/Delivery/pages/Notifications";
+import DeliveryEarnings from "./modules/Delivery/pages/Earnings";
 // Vendor Routes
 import VendorLogin from "./modules/Vendor/pages/Login";
 import VendorRegister from "./modules/Vendor/pages/Register";
@@ -550,6 +566,7 @@ const AppRoutes = () => {
         <Route path="orders/:id" element={<DeliveryOrderDetail />} />
         <Route path="notifications" element={<DeliveryNotifications />} />
         <Route path="profile" element={<DeliveryProfile />} />
+        <Route path="earnings" element={<DeliveryEarnings />} />
       </Route>
       {/* Vendor Routes */}
       <Route path="/vendor/login" element={<VendorLogin />} />
@@ -632,43 +649,48 @@ const AppRoutes = () => {
 
 function App() {
   return (
-    <ErrorBoundary>
-      <Router
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}>
-        <AppBootstrap />
-        <ScrollToTop />
-        <AppRoutes />
-        <CartDrawer />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#212121",
-              color: "#fff",
-            },
-            success: {
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <Router
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}>
+          <AppBootstrap />
+          <FcmManager />
+          <ScrollToTop />
+          <AppRoutes />
+          <CartDrawer />
+          <Toaster
+            position="top-right"
+            toastOptions={{
               duration: 3000,
-              iconTheme: {
-                primary: "#388E3C",
-                secondary: "#fff",
+              style: {
+                background: "#212121",
+                color: "#fff",
               },
-            },
-            error: {
-              duration: 4000,
-              iconTheme: {
-                primary: "#FF6161",
-                secondary: "#fff",
+              success: {
+                duration: 3000,
+                iconTheme: {
+                  primary: "#388E3C",
+                  secondary: "#fff",
+                },
               },
-            },
-          }}
-        />
-      </Router>
-    </ErrorBoundary>
+              error: {
+                duration: 4000,
+                iconTheme: {
+                  primary: "#FF6161",
+                  secondary: "#fff",
+                },
+              },
+            }}
+          />
+        </Router>
+      </ErrorBoundary>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
+
 
 export default App;

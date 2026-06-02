@@ -6,6 +6,7 @@ import { useCustomerStore } from '../../../../shared/store/customerStore';
 import CustomerCard from '../../components/Customers/CustomerCard';
 import CustomerDetail from '../../components/Customers/CustomerDetail';
 import DataTable from '../../components/DataTable';
+import ExportButton from '../../components/ExportButton';
 import Pagination from '../../components/Pagination';
 import AnimatedSelect from '../../components/AnimatedSelect';
 import { formatPrice } from '../../../../shared/utils/helpers';
@@ -185,6 +186,22 @@ const ViewCustomers = () => {
             >
               Table
             </button>
+          </div>
+
+          <div className="w-full sm:w-auto">
+            <ExportButton
+              data={customers}
+              headers={[
+                { label: 'ID', accessor: (row) => row.id },
+                { label: 'Name', accessor: (row) => row.name },
+                { label: 'Email', accessor: (row) => row.email },
+                { label: 'Phone', accessor: (row) => row.phone || 'N/A' },
+                { label: 'Orders', accessor: (row) => row.orders || 0 },
+                { label: 'Total Spent ($)', accessor: (row) => row.totalSpent || 0 },
+                { label: 'Status', accessor: (row) => row.status },
+              ]}
+              filename="customers"
+            />
           </div>
         </div>
       </div>

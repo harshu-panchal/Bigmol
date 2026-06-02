@@ -19,7 +19,8 @@ export const placeOrderSchema = Joi.object({
         zipCode: Joi.string().required(),
         country: Joi.string().required(),
     }).required(),
-    paymentMethod: Joi.string().valid('card', 'cash', 'cod', 'bank', 'wallet', 'upi', 'emi').required(),
+    paymentMethod: Joi.string().valid('card', 'cash', 'cod', 'bank', 'wallet', 'upi', 'emi', 'online').required(),
+    totalAmount: Joi.number().optional().default(0),
     couponCode: Joi.string().optional().allow(''),
     shippingOption: Joi.string().valid('standard', 'express').default('standard'),
     emiDetails: Joi.object({

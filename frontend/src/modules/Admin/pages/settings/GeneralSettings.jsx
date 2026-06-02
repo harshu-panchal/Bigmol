@@ -44,7 +44,7 @@ const GeneralSettings = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const {
       primaryColor,
@@ -56,20 +56,23 @@ const GeneralSettings = () => {
       ...generalData
     } = formData;
 
-    updateSettings("general", {
-      ...generalData,
-      socialMedia: socialMedia || {},
-      storeDescription: storeDescription || "",
-    });
-
-    updateSettings("theme", {
-      primaryColor: primaryColor || "#10B981",
-      secondaryColor: secondaryColor || "#3B82F6",
-      accentColor: accentColor || "#FFE11B",
-      fontFamily: fontFamily || "Inter",
-    });
-
-    toast.success("Settings saved successfully");
+    try {
+      await Promise.all([
+        updateSettings("general", {
+          ...generalData,
+          socialMedia: socialMedia || {},
+          storeDescription: storeDescription || "",
+        }),
+        updateSettings("theme", {
+          primaryColor: primaryColor || "#10B981",
+          secondaryColor: secondaryColor || "#3B82F6",
+          accentColor: accentColor || "#FFE11B",
+          fontFamily: fontFamily || "Inter",
+        })
+      ]);
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    }
   };
 
   const sections = [

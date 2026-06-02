@@ -16,7 +16,7 @@ const returnRequestSchema = new mongoose.Schema(
         reason: { type: String, required: true },
         status: {
             type: String,
-            enum: ['pending', 'approved', 'processing', 'rejected', 'completed'],
+            enum: ['pending', 'approved', 'pickup_assigned', 'picked_up', 'processing', 'rejected', 'completed'],
             default: 'pending',
             index: true,
         },
@@ -25,6 +25,13 @@ const returnRequestSchema = new mongoose.Schema(
         adminNote: String,
         rejectionReason: String,
         images: [String],
+        deliveryBoyId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryBoy', index: true },
+        pickupOtpHash: { type: String, select: false },
+        pickupOtpExpiry: { type: Date, select: false },
+        pickupOtpSentAt: { type: Date, select: false },
+        pickupOtpDebug: { type: String, select: false },
+        pickupOtpVerifiedAt: Date,
+        pickupOtpAttempts: { type: Number, default: 0, select: false },
     },
     { timestamps: true }
 );

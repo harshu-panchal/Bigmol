@@ -3,6 +3,7 @@ import TicketType from '../../../models/TicketType.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { ApiResponse } from '../../../utils/ApiResponse.js';
 import { asyncHandler } from '../../../utils/asyncHandler.js';
+import mongoose from 'mongoose';
 
 const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -88,10 +89,27 @@ export const getTicketById = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Ticket not found');
     }
 
+    // Enrich messages with sender info
+    const enrichedMessages = await Promise.all(ticket.messages.map(async (msg) => {
+        let senderName = 'Unknown';
+        if (msg.senderType === 'admin') {
+            const admin = await mongoose.model('Admin').findById(msg.senderId).select('name');
+            senderName = admin?.name || 'Admin';
+        } else if (msg.senderType === 'user') {
+            const user = await mongoose.model('User').findById(msg.senderId).select('name');
+            senderName = user?.name || 'Customer';
+        } else if (msg.senderType === 'vendor') {
+            const vendor = await mongoose.model('Vendor').findById(msg.senderId).select('storeName name');
+            senderName = vendor?.storeName || vendor?.name || 'Vendor';
+        }
+        return { ...msg.toObject(), senderName };
+    }));
+
     // Normalize
     const normalized = {
         ...ticket._doc,
         id: ticket._id,
+        messages: enrichedMessages,
         customer: ticket.userId ? {
             name: ticket.userId.name,
             email: ticket.userId.email,

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '../../../shared/utils/api';
+import { ensureFcmToken, removeCurrentFcmToken } from '../../../shared/firebase/messaging';
 
 const normalizeDeliveryBoy = (raw) => {
   if (!raw) return null;
@@ -22,7 +23,8 @@ const normalizeDeliveryBoy = (raw) => {
 const mapBackendStatusToUI = (status) => {
   if (status === 'shipped') return 'in-transit';
   if (status === 'delivered') return 'completed';
-  if (status === 'pending' || status === 'processing') return 'pending';
+  if (status === 'processing') return 'processing';
+  if (status === 'pending') return 'pending';
   return status || 'pending';
 };
 
@@ -85,8 +87,16 @@ export const useDeliveryAuthStore = create(
       selectedOrder: null,
       isLoadingOrders: false,
       isLoadingOrder: false,
-      isUpdatingOrderStatus: false,
       isUpdatingStatus: false,
+      locationTrackingInterval: null,
+      earnings: {
+        totalDeliveries: 0,
+        totalEarnings: 0,
+        pendingCash: 0,
+        settledCash: 0
+      },
+      pickups: [],
+      isLoadingPickups: false,
 
       // Delivery boy login action
       register: async (registrationData) => {
@@ -191,6 +201,8 @@ export const useDeliveryAuthStore = create(
             isAuthenticated: true,
             isLoading: false,
           });
+          ensureFcmToken({ forcePrompt: false }).catch(() => {});
+          window.dispatchEvent(new Event('fcm:prompt'));
 
           return { success: true, deliveryBoy: enriched };
         } catch (error) {
@@ -201,11 +213,8 @@ export const useDeliveryAuthStore = create(
 
       // Delivery boy logout action
       logout: () => {
-        const refreshToken = localStorage.getItem('delivery-refresh-token');
-        if (refreshToken) {
-          api.post('/delivery/auth/logout', { refreshToken }).catch(() => {});
-        }
-
+        removeCurrentFcmToken().catch(() => {});
+        get().stopLocationTracking();
         set({
           deliveryBoy: null,
           token: null,
@@ -219,6 +228,7 @@ export const useDeliveryAuthStore = create(
             pages: 1,
           },
           selectedOrder: null,
+          locationTrackingInterval: null,
         });
         localStorage.removeItem('delivery-token');
         localStorage.removeItem('delivery-refresh-token');
@@ -378,6 +388,11 @@ export const useDeliveryAuthStore = create(
           }));
           return normalized;
         } catch (error) {
+          if (error.response?.status === 409) {
+            const refreshedOrder = await get().fetchOrderById(id);
+            set({ isUpdatingOrderStatus: false });
+            return refreshedOrder;
+          }
           set({ isUpdatingOrderStatus: false });
           throw error;
         }
@@ -390,8 +405,11 @@ export const useDeliveryAuthStore = create(
           (state.selectedOrder && String(state.selectedOrder.id) === String(id)
             ? state.selectedOrder
             : null);
-        if (current && current.status !== 'pending') {
-          return current;
+        
+        if (current) {
+          if (['shipped', 'delivered', 'cancelled', 'returned'].includes(current.rawStatus)) {
+            return current;
+          }
         }
         return get().updateOrderStatus(id, 'shipped');
       },
@@ -403,8 +421,11 @@ export const useDeliveryAuthStore = create(
           (state.selectedOrder && String(state.selectedOrder.id) === String(id)
             ? state.selectedOrder
             : null);
-        if (current && current.status !== 'in-transit') {
-          return current;
+            
+        if (current) {
+          if (['delivered', 'cancelled', 'returned'].includes(current.rawStatus)) {
+            return current;
+          }
         }
         return get().updateOrderStatus(id, 'delivered', { otp });
       },
@@ -412,6 +433,56 @@ export const useDeliveryAuthStore = create(
       resendDeliveryOtp: async (id) => {
         await api.post(`/delivery/orders/${id}/resend-delivery-otp`);
         return true;
+      },
+
+      fetchPickups: async (options = {}) => {
+        set({ isLoadingPickups: true });
+        try {
+          const { status, page, limit } = options || {};
+          const params = {};
+          if (status) params.status = status;
+          if (page !== undefined) params.page = page;
+          if (limit !== undefined) params.limit = limit;
+
+          const response = await api.get('/delivery/returns', { params });
+          const payload = response?.data ?? response;
+          const list = (payload?.pickups || []).map(p => ({
+            ...p,
+            id: p._id,
+            orderId: p.orderId?.orderId || 'N/A',
+            customer: p.userId?.name || 'Customer',
+            address: toAddressLine(p.orderId?.shippingAddress),
+            phone: p.userId?.phone || '',
+            status: p.status === 'pickup_assigned' ? 'assigned' : p.status
+          }));
+          set({ pickups: list, isLoadingPickups: false });
+          return list;
+        } catch (error) {
+          set({ isLoadingPickups: false });
+          throw error;
+        }
+      },
+
+      sendPickupOtp: async (id) => {
+        const response = await api.post(`/delivery/returns/${id}/send-otp`);
+        const payload = response?.data ?? response;
+        return payload?.debugOtp || true;
+      },
+
+      completePickup: async (id, otp) => {
+        set({ isLoadingOrder: true });
+        try {
+          const response = await api.patch(`/delivery/returns/${id}/pickup`, { otp });
+          const updated = response?.data ?? response;
+          set((state) => ({
+            pickups: state.pickups.map(p => String(p._id) === String(id) ? { ...p, status: 'picked_up' } : p),
+            isLoadingOrder: false
+          }));
+          return updated;
+        } catch (error) {
+          set({ isLoadingOrder: false });
+          throw error;
+        }
       },
 
       // Initialize delivery auth state from localStorage
@@ -430,6 +501,70 @@ export const useDeliveryAuthStore = create(
           }
         }
       },
+
+      fetchEarnings: async (period = 'all') => {
+        try {
+          const response = await api.get('/delivery/orders/earnings', { params: { period } });
+          const payload = response.data || response;
+          set({ earnings: payload });
+          return payload;
+        } catch (error) {
+          console.error('Failed to fetch earnings:', error);
+          return null;
+        }
+      },
+
+      updateAvatar: async (file) => {
+        set({ isLoading: true });
+        try {
+          const formData = new FormData();
+          formData.append('avatar', file);
+          const response = await api.post('/delivery/auth/avatar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const payload = response.data || response;
+          const current = get().deliveryBoy;
+          if (current) {
+            set({ deliveryBoy: { ...current, avatar: payload.avatar } });
+          }
+          set({ isLoading: false });
+          return payload.avatar;
+        } catch (error) {
+          set({ isLoading: false });
+          throw error;
+        }
+      },
+
+      startLocationTracking: () => {
+        if (get().locationTrackingInterval) return;
+        
+        // Track immediately then every 30s
+        const update = () => {
+          if (!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              api.patch('/delivery/auth/location', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude
+              }).catch(() => {});
+            },
+            null,
+            { enableHighAccuracy: true }
+          );
+        };
+
+        update();
+        const intervalId = setInterval(update, 30000);
+        set({ locationTrackingInterval: intervalId });
+      },
+
+      stopLocationTracking: () => {
+        const intervalId = get().locationTrackingInterval;
+        if (intervalId) {
+          clearInterval(intervalId);
+          set({ locationTrackingInterval: null });
+        }
+      },
     }),
     {
       name: 'delivery-auth-storage',
@@ -437,4 +572,3 @@ export const useDeliveryAuthStore = create(
     }
   )
 );
-

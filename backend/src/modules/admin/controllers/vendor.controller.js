@@ -2,6 +2,7 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Vendor from '../../../models/Vendor.model.js';
+import Product from '../../../models/Product.model.js';
 import Commission from '../../../models/Commission.model.js';
 import { sendEmail } from '../../../services/email.service.js';
 import { createNotification } from '../../../services/notification.service.js';
@@ -64,9 +65,17 @@ export const getAllVendors = asyncHandler(async (req, res) => {
 
 // GET /api/admin/vendors/:id
 export const getVendorDetail = asyncHandler(async (req, res) => {
-    const vendor = await Vendor.findById(req.params.id).select('-password -otp -otpExpiry').lean();
+    const [vendor, productCount] = await Promise.all([
+        Vendor.findById(req.params.id).select('-password -otp -otpExpiry').lean(),
+        Product.countDocuments({ vendorId: req.params.id })
+    ]);
+
     if (!vendor) throw new ApiError(404, 'Vendor not found.');
-    res.status(200).json(new ApiResponse(200, toApiVendor(vendor), 'Vendor detail fetched.'));
+
+    res.status(200).json(new ApiResponse(200, {
+        ...toApiVendor(vendor),
+        productCount
+    }, 'Vendor detail fetched.'));
 });
 
 // PATCH /api/admin/vendors/:id/status

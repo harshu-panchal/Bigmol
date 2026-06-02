@@ -369,3 +369,88 @@ export const deleteOrder = asyncHandler(async (req, res) => {
     if (!order) throw new ApiError(404, 'Order not found.');
     res.status(200).json(new ApiResponse(200, null, 'Order archived.'));
 });
+// PATCH /api/admin/orders/bulk-status
+export const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
+    const { orderIds, status } = req.body;
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        throw new ApiError(400, 'orderIds array is required.');
+    }
+    const allowed = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'];
+    if (!allowed.includes(status)) throw new ApiError(400, `Status must be one of: ${allowed.join(', ')}`);
+
+    const orders = await Order.find({
+        $or: [
+            { orderId: { $in: orderIds } },
+            { _id: { $in: orderIds.filter(id => id.match(/^[0-9a-fA-F]{24}$/)) } }
+        ],
+        isDeleted: { $ne: true },
+    });
+
+    const results = {
+        success: [],
+        failed: []
+    };
+
+    const allowedTransitions = {
+        pending: ['processing', 'cancelled'],
+        processing: ['shipped', 'cancelled'],
+        shipped: ['delivered', 'cancelled', 'returned'],
+        delivered: ['returned'],
+        cancelled: [],
+        returned: [],
+    };
+
+    for (const order of orders) {
+        try {
+            const previousStatus = String(order.status || '').toLowerCase();
+            const nextStatus = String(status || '').toLowerCase();
+
+            if (previousStatus !== nextStatus) {
+                const nextAllowed = allowedTransitions[previousStatus] || [];
+                if (!nextAllowed.includes(nextStatus)) {
+                    throw new Error(`Cannot move order from ${previousStatus} to ${nextStatus}.`);
+                }
+            }
+
+            order.status = nextStatus;
+            // Simplified side effects for bulk update (similar to single update)
+            if (nextStatus === 'delivered') order.deliveredAt = new Date();
+            else if (nextStatus === 'cancelled') order.cancelledAt = new Date();
+
+            await order.save();
+            results.success.push(order.orderId || order._id);
+        } catch (error) {
+            results.failed.push({
+                id: order.orderId || order._id,
+                reason: error.message
+            });
+        }
+    }
+
+    res.status(200).json(new ApiResponse(200, results, `Bulk update completed. ${results.success.length} succeeded, ${results.failed.length} failed.`));
+});
+
+// DELETE /api/admin/orders/bulk-delete
+export const bulkDeleteOrders = asyncHandler(async (req, res) => {
+    const { orderIds } = req.body;
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        throw new ApiError(400, 'orderIds array is required.');
+    }
+
+    await Order.updateMany(
+        {
+            $or: [
+                { orderId: { $in: orderIds } },
+                { _id: { $in: orderIds.filter(id => id.match(/^[0-9a-fA-F]{24}$/)) } }
+            ],
+            isDeleted: { $ne: true },
+        },
+        {
+            isDeleted: true,
+            deletedAt: new Date(),
+            deletedBy: req.user?.id || null,
+        }
+    );
+
+    res.status(200).json(new ApiResponse(200, null, 'Orders archived successfully.'));
+});

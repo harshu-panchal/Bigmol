@@ -16,14 +16,15 @@ import PageTransition from '../../../shared/components/PageTransition';
 import { formatPrice } from '../../../shared/utils/helpers';
 import toast from 'react-hot-toast';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
+import OtpModal from '../components/OtpModal';
 
 const DeliveryOrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fetchOrderById, acceptOrder, completeOrder, resendDeliveryOtp, isLoadingOrder, isUpdatingOrderStatus } = useDeliveryAuthStore();
+  const { fetchOrderById, acceptOrder, completeOrder, resendDeliveryOtp, isLoadingOrder, isUpdatingOrderStatus, startLocationTracking, stopLocationTracking } = useDeliveryAuthStore();
   const [order, setOrder] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [deliveryOtp, setDeliveryOtp] = useState('');
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
 
   const loadOrder = async () => {
@@ -41,10 +42,21 @@ const DeliveryOrderDetail = () => {
     loadOrder();
   }, [id, fetchOrderById]);
 
+  useEffect(() => {
+    if (order?.status === 'in-transit') {
+      startLocationTracking();
+    } else {
+      stopLocationTracking();
+    }
+    return () => stopLocationTracking();
+  }, [order?.status]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
+      case 'processing':
+        return 'bg-purple-100 text-purple-800';
       case 'in-transit':
         return 'bg-blue-100 text-blue-800';
       case 'completed':
@@ -65,22 +77,8 @@ const DeliveryOrderDetail = () => {
     }
   };
 
-  const handleCompleteOrder = async () => {
-    if (!order || order.status !== 'in-transit') return;
-    const normalizedOtp = String(deliveryOtp || '').trim();
-    if (!/^\d{6}$/.test(normalizedOtp)) {
-      toast.error('Please enter valid 6-digit OTP');
-      return;
-    }
-
-    try {
-      const updated = await completeOrder(order.id, normalizedOtp);
-      setOrder(updated);
-      setDeliveryOtp('');
-      toast.success('Order marked as delivered');
-    } catch {
-      // Error toast handled by API interceptor.
-    }
+  const handleCompleteOrder = () => {
+    setIsOtpModalOpen(true);
   };
 
   const handleResendOtp = async () => {
@@ -97,40 +95,15 @@ const DeliveryOrderDetail = () => {
   };
 
   const openInGoogleMaps = () => {
-    const { latitude, longitude } = order;
+    const { latitude, longitude, address } = order;
     
-    // Detect platform
-    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-    const isAndroid = /android/i.test(userAgent);
-    
-    if (isAndroid) {
-      // Android: Use intent URL (opens Google Maps app if installed, otherwise web)
-      const intentUrl = `intent://maps.google.com/maps?daddr=${latitude},${longitude}&directionsmode=driving#Intent;scheme=https;package=com.google.android.apps.maps;end`;
-      window.location.href = intentUrl;
-    } else if (isIOS) {
-      // iOS: Try Google Maps app URL scheme first
-      const appUrl = `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`;
-      // Universal link as fallback (opens app if installed, otherwise web)
-      const universalUrl = `https://maps.google.com/maps?daddr=${latitude},${longitude}&directionsmode=driving`;
-      
-      // Try app URL
-      const link = document.createElement('a');
-      link.href = appUrl;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Fallback to universal link after brief delay
-      setTimeout(() => {
-        window.location.href = universalUrl;
-      }, 400);
-    } else {
-      // Desktop: Use web version
-      const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-      window.open(webUrl, '_blank');
+    let destination = address;
+    if (latitude && longitude) {
+      destination = `${latitude},${longitude}`;
     }
+
+    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+    window.open(webUrl, '_blank');
   };
 
   if (isLoadingOrder) {
@@ -240,8 +213,8 @@ const DeliveryOrderDetail = () => {
           )}
         </motion.div>
 
-        {/* Map - Show when order is accepted */}
-        {(order.status === 'in-transit' || order.status === 'completed') && order.latitude && order.longitude && (
+        {/* Map - Show for in-transit orders */}
+        {(order.status === 'in-transit' || order.status === 'completed') && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -252,25 +225,34 @@ const DeliveryOrderDetail = () => {
               <FiMapPin className="text-primary-600" />
               Delivery Location
             </h2>
-            <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '300px' }}>
-              <iframe
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                loading="lazy"
-                allowFullScreen
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${order.longitude - 0.01},${order.latitude - 0.01},${order.longitude + 0.01},${order.latitude + 0.01}&layer=mapnik&marker=${order.latitude},${order.longitude}`}
-                title="Delivery Location Map"
-              />
+            <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '220px' }}>
+              {order.latitude && order.longitude ? (
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${order.longitude - 0.01},${order.latitude - 0.01},${order.longitude + 0.01},${order.latitude + 0.01}&layer=mapnik&marker=${order.latitude},${order.longitude}`}
+                  title="Delivery Location Map"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-50 flex items-center justify-center p-6 text-center">
+                  <div>
+                    <FiMapPin className="text-4xl text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Map view available via external navigation</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-3">
               <button
                 onClick={openInGoogleMaps}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
               >
-                <FiNavigation />
-                Open in Google Maps
+                <FiNavigation className="text-lg" />
+                Navigate to Destination
               </button>
             </div>
           </motion.div>
@@ -348,35 +330,22 @@ const DeliveryOrderDetail = () => {
             </button>
           )}
           {order.status === 'in-transit' && (
-            <div className="space-y-3">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={deliveryOtp}
-                onChange={(e) => setDeliveryOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6-digit delivery OTP"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary-500 focus:outline-none text-base"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleResendOtp}
-                  disabled={isResendingOtp || isUpdatingOrderStatus}
-                  className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold text-sm hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isResendingOtp ? 'Resending...' : 'Resend OTP'}
-                </button>
-                <button
-                  onClick={handleCompleteOrder}
-                  disabled={isUpdatingOrderStatus}
-                  className="w-full gradient-green text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <FiCheckCircle />
-                  {isUpdatingOrderStatus ? 'Please wait...' : 'Mark as Delivered'}
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={handleCompleteOrder}
+              disabled={isUpdatingOrderStatus}
+              className="w-full gradient-green text-white py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-green-100"
+            >
+              <FiCheckCircle className="text-lg" />
+              {isUpdatingOrderStatus ? 'Completing...' : 'Mark as Delivered'}
+            </button>
           )}
+
+          <OtpModal
+            isOpen={isOtpModalOpen}
+            orderId={order.id}
+            onClose={() => setIsOtpModalOpen(false)}
+            onSuccess={() => loadOrder()}
+          />
           <button
             onClick={() => order.phone && window.open(`tel:${order.phone}`, '_self')}
             disabled={!order.phone}

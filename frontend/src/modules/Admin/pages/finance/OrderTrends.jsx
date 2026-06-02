@@ -29,7 +29,7 @@ const getRangeForPeriod = (period) => {
 const OrderTrends = () => {
   const [period, setPeriod] = useState("month");
   const [isPageLoading, setIsPageLoading] = useState(false);
-  const { revenueData, fetchRevenueData } = useAnalyticsStore();
+  const { orderTrendsData, fetchOrderTrends } = useAnalyticsStore();
 
   useEffect(() => {
     const periodMap = {
@@ -43,7 +43,7 @@ const OrderTrends = () => {
     const run = async () => {
       setIsPageLoading(true);
       try {
-        await fetchRevenueData(periodMap[period] || 'monthly', range);
+        await fetchOrderTrends(periodMap[period] || 'daily', range);
       } finally {
         if (mounted) setIsPageLoading(false);
       }
@@ -53,15 +53,15 @@ const OrderTrends = () => {
     return () => {
       mounted = false;
     };
-  }, [period, fetchRevenueData]);
+  }, [period, fetchOrderTrends]);
 
   const orderTrends = useMemo(() => {
-    if (!revenueData) return [];
-    return revenueData.map((day) => ({
+    if (!orderTrendsData) return [];
+    return orderTrendsData.map((day) => ({
       date: day._id,
-      orders: day.orders || 0,
+      orders: day.total || 0,
     }));
-  }, [revenueData]);
+  }, [orderTrendsData]);
 
   const totalOrders = orderTrends.reduce((sum, day) => sum + day.orders, 0);
   const averageOrders =

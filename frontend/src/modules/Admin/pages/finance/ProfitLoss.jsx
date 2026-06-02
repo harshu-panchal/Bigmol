@@ -29,7 +29,7 @@ const getRangeForPeriod = (period) => {
 const ProfitLoss = () => {
   const [period, setPeriod] = useState("month");
   const [isPageLoading, setIsPageLoading] = useState(false);
-  const { financialSummary, fetchFinancialSummary } = useAnalyticsStore();
+  const { profitLossData, fetchProfitLoss } = useAnalyticsStore();
 
   useEffect(() => {
     const periodMap = {
@@ -43,7 +43,7 @@ const ProfitLoss = () => {
     const run = async () => {
       setIsPageLoading(true);
       try {
-        await fetchFinancialSummary(periodMap[period] || 'monthly', range);
+        await fetchProfitLoss(periodMap[period] || 'monthly', range);
       } finally {
         if (mounted) setIsPageLoading(false);
       }
@@ -53,23 +53,24 @@ const ProfitLoss = () => {
     return () => {
       mounted = false;
     };
-  }, [period, fetchFinancialSummary]);
+  }, [period, fetchProfitLoss]);
 
   const chartData = useMemo(() => {
-    return financialSummary.map(item => ({
+    return profitLossData.map(item => ({
       ...item,
-      date: item._id,
+      date: item.period,
+      profit: item.grossProfit
     }));
-  }, [financialSummary]);
+  }, [profitLossData]);
 
   const financials = useMemo(() => {
-    const revenue = financialSummary.reduce((sum, item) => sum + item.revenue, 0);
-    const totalTax = financialSummary.reduce((sum, item) => sum + (item.tax || 0), 0);
-    const totalDelivery = financialSummary.reduce((sum, item) => sum + (item.delivery || 0), 0);
-    const totalDiscount = financialSummary.reduce((sum, item) => sum + (item.discount || 0), 0);
-    const grossProfit = revenue - totalDiscount;
-    const totalExpenses = totalTax + totalDelivery + totalDiscount;
-    const netProfit = revenue - totalExpenses;
+    const revenue = profitLossData.reduce((sum, item) => sum + item.revenue, 0);
+    const totalTax = profitLossData.reduce((sum, item) => sum + (item.tax || 0), 0);
+    const totalDelivery = profitLossData.reduce((sum, item) => sum + (item.shipping || 0), 0);
+    const totalDiscount = profitLossData.reduce((sum, item) => sum + (item.discount || 0), 0);
+    const grossProfit = profitLossData.reduce((sum, item) => sum + (item.grossProfit || 0), 0);
+    const totalDeductions = totalTax + totalDelivery;
+    const netProfit = grossProfit; // Gross profit in our case is after tax and shipping
     const profitMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
 
     return {
@@ -77,14 +78,14 @@ const ProfitLoss = () => {
       totalTax,
       totalDelivery,
       totalDiscount,
-      totalExpenses,
+      totalExpenses: totalDeductions,
       grossProfit,
       netProfit,
       profitMargin,
     };
-  }, [financialSummary]);
+  }, [profitLossData]);
 
-  if (isPageLoading && financialSummary.length === 0) {
+  if (isPageLoading && profitLossData.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>

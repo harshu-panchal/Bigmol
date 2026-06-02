@@ -8,7 +8,8 @@ import * as notificationController from '../controllers/notification.controller.
 import * as paymentController from '../controllers/payment.controller.js';
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
-import { authLimiter, otpLimiter } from '../../../middlewares/rateLimiter.js';
+import { authLimiter, otpLimiter, paymentLimiter } from '../../../middlewares/rateLimiter.js';
+
 import { validate } from '../../../middlewares/validate.js';
 import { uploadSingle } from '../../../middlewares/upload.js';
 import {
@@ -71,11 +72,13 @@ router.get('/orders', ...customerAuth, orderController.getUserOrders);
 router.get('/orders/:id', ...customerAuth, orderController.getOrderDetail);
 router.patch('/orders/:id/cancel', ...customerAuth, orderController.cancelOrder);
 router.post('/orders/:id/returns', ...customerAuth, validate(createReturnRequestSchema), orderController.createReturnRequest);
+router.post('/orders/:id/rate-delivery', ...customerAuth, orderController.rateDeliveryBoy);
 router.get('/returns', ...customerAuth, orderController.getUserReturnRequests);
 router.get('/returns/:id', ...customerAuth, orderController.getUserReturnRequestById);
  
 // Payment routes
-router.post('/payments/verify', ...customerAuth, paymentController.verifyPayment);
+router.post('/payments/verify', ...customerAuth, paymentLimiter, paymentController.verifyPayment);
+
 
 
 // Notification routes (protected)
@@ -83,5 +86,7 @@ router.get('/notifications', ...customerAuth, notificationController.getUserNoti
 router.put('/notifications/:id/read', ...customerAuth, notificationController.markUserNotificationAsRead);
 router.put('/notifications/read-all', ...customerAuth, notificationController.markAllUserNotificationsAsRead);
 router.delete('/notifications/:id', ...customerAuth, notificationController.deleteUserNotification);
+router.post('/notifications/fcm-token', ...customerAuth, notificationController.registerUserFcmToken);
+router.delete('/notifications/fcm-token', ...customerAuth, notificationController.removeUserFcmToken);
 
 export default router;
