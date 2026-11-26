@@ -1,7 +1,7 @@
 // Seeds categories, brands, vendors and products into MongoDB.
 // Source 1: the frontend demo files in frontend/src/data (categories, brands, vendors, products).
 // Source 2: extra mock data defined below.
-// Images are copied to frontend/public/seed so the frontend serves them at /seed/...
+// Image files are stored in MongoDB (Media collection) and served by the backend at /api/media/<id>.
 //
 // Run from backend/:   node src/scripts/seedCatalog.js
 // Remove seeded products:   node src/scripts/seedCatalog.js --clean
@@ -17,34 +17,54 @@ import Category from '../models/Category.model.js';
 import Brand from '../models/Brand.model.js';
 import Vendor from '../models/Vendor.model.js';
 import Product from '../models/Product.model.js';
+import Media from '../models/Media.model.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND = path.resolve(__dirname, '../../../frontend');
 const DATA_JS = path.join(FRONTEND, 'src/data');
 const DATA_ASSETS = path.join(FRONTEND, 'data');
-const PUBLIC_SEED = path.join(FRONTEND, 'public/seed');
 const SEED_TAG = 'seed-data';
 const VENDOR_PASSWORD = 'vendor123';
 
 const slugify = (s) =>
     String(s).toLowerCase().replace(/&/g, 'and').replace(/'/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-const img = (folder, file) => `/seed/${folder}/${encodeURIComponent(file)}`;
+// "products/blazer.png" -> "/api/media/<id>", filled by uploadImages()
+const MEDIA_URL = {};
+const img = (folder, file) => {
+    const url = MEDIA_URL[`${folder}/${file}`];
+    if (!url) throw new Error(`Image not found: frontend/data/${folder}/${file}`);
+    return url;
+};
+const CONTENT_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif', '.svg': 'image/svg+xml' };
 
-// ─── 1. Copy images into frontend/public/seed ────────────────────────────────
-function copyImages() {
+// ─── 1. Upload image files into MongoDB (Media collection) ───────────────────
+async function uploadImages() {
+    let uploaded = 0;
     for (const folder of ['products', 'brands', 'categories', 'logos']) {
-        const src = path.join(DATA_ASSETS, folder);
-        if (!fs.existsSync(src)) continue;
-        const dest = path.join(PUBLIC_SEED, folder);
-        fs.mkdirSync(dest, { recursive: true });
-        for (const f of fs.readdirSync(src)) {
-            if (fs.statSync(path.join(src, f)).isFile()) fs.copyFileSync(path.join(src, f), path.join(dest, f));
+        const dir = path.join(DATA_ASSETS, folder);
+        if (!fs.existsSync(dir)) continue;
+        for (const file of fs.readdirSync(dir)) {
+            const contentType = CONTENT_TYPES[path.extname(file).toLowerCase()];
+            if (!contentType) continue;
+            const key = `${folder}/${file}`;
+            const data = fs.readFileSync(path.join(dir, file));
+            let media = await Media.findOne({ key }).select('_id size');
+            if (!media || media.size !== data.length) {
+                media = await Media.findOneAndUpdate(
+                    { key },
+                    { key, contentType, size: data.length, data },
+                    { upsert: true, new: true, projection: { _id: 1 } }
+                );
+                uploaded++;
+            }
+            MEDIA_URL[key] = `/api/media/${media._id}`;
         }
     }
+    return uploaded;
 }
 
-// ─── 2. Load frontend demo data (image imports become /seed/... URLs) ────────
+// ─── 2. Load frontend demo data (image imports become /api/media/... URLs) ───
 async function loadFrontendData(file) {
     const code = fs
         .readFileSync(path.join(DATA_JS, file), 'utf8')
@@ -165,8 +185,8 @@ async function main() {
         return;
     }
 
-    copyImages();
-    console.log(`Images copied to ${PUBLIC_SEED}`);
+    const uploaded = await uploadImages();
+    console.log(`Images in MongoDB: ${Object.keys(MEDIA_URL).length} (${uploaded} uploaded this run)`);
 
     const [{ categories }, { brands }, { vendors }, { products }] = await Promise.all(
         ['categories.js', 'brands.js', 'vendors.js', 'products.js'].map(loadFrontendData)
@@ -183,7 +203,7 @@ async function main() {
         if (!cat) {
             cat = await Category.create({ ...c, slug, order: 100 + created, isActive: true });
             created++;
-        } else if (!cat.image && c.image) {
+        } else if (c.image && (!cat.image || cat.image.startsWith('/seed/'))) {
             cat.image = c.image;
             await cat.save();
         }

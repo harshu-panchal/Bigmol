@@ -13,6 +13,7 @@ import userRoutes from './modules/user/routes/user.routes.js';
 import adminRoutes from './modules/admin/routes/admin.routes.js';
 import vendorRoutes from './modules/vendor/routes/vendor.routes.js';
 import deliveryRoutes from './modules/delivery/routes/delivery.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 
 // Middleware imports
 import { apiLimiter } from './middlewares/rateLimiter.js';
@@ -45,7 +46,8 @@ const isValidDeliveryDocToken = (relativePath, rawToken) => {
 app.use(helmet());
 app.use(mongoSanitize());
 const allowedOrigins = [
-    process.env.CLIENT_URL,
+    // CLIENT_URL may list several origins: https://bigmol.com,https://www.bigmol.com
+    ...(process.env.CLIENT_URL || '').split(',').map((u) => u.trim().replace(/\/$/, '')),
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:3001'
@@ -68,6 +70,9 @@ app.use(compression());
 // ─── Body Parsing ────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Images stored in MongoDB (mounted before the rate limiter: one page loads many images)
+app.use('/api/media', mediaRoutes);
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 app.use('/api', apiLimiter);
