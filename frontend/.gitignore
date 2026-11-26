@@ -90,3 +90,6 @@ storybook-static
 tmp/
 temp/
 
+
+# Images copied by backend/src/scripts/seedCatalog.js (originals live in frontend/data)
+/public/seed/

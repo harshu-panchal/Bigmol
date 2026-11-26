@@ -15,7 +15,7 @@ const MobileCategoryGrid = () => {
 
   const displayCategories = useMemo(() => {
     const roots = getRootCategories().filter((cat) => cat.isActive !== false);
-    if (!roots.length) return fallbackCategories;
+    if (!roots.length) return [];
     return roots.map((cat) => {
       const fallbackCat = fallbackCategories.find(
         (fc) => normalizeId(fc.id) === normalizeId(cat.id) || fc.name?.toLowerCase() === cat.name?.toLowerCase()

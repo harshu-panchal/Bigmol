@@ -156,7 +156,7 @@ const MobileCategory = () => {
       (cat) => !getParentId(cat) && cat.isActive !== false
     );
     if (roots.length) return roots;
-    return fallbackCategories;
+    return [];
   }, [categories]);
 
   const categoryProducts = useMemo(() => {

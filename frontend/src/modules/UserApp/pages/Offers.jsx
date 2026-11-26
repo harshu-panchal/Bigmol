@@ -70,7 +70,7 @@ const MobileOffers = () => {
     if (activeStoreCategories.length) {
       return activeStoreCategories;
     }
-    return fallbackCategories;
+    return [];
   }, [storeCategories]);
 
   useEffect(() => {

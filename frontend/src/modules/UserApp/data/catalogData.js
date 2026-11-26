@@ -1,9 +1,3 @@
-import {
-  products as staticProducts,
-  getRecommendedProducts as getStaticRecommendedProducts,
-} from "../../../data/products";
-import { vendors as staticVendors } from "../../../data/vendors";
-import { brands as staticBrands } from "../../../data/brands";
 
 const PRODUCTS_CACHE_KEY = "user-catalog-products-cache";
 const VENDORS_CACHE_KEY = "user-catalog-vendors-cache";
@@ -106,26 +100,26 @@ const normalizeBrand = (raw) => {
 
 export const getCatalogProducts = () => {
   const cached = parseCache(PRODUCTS_CACHE_KEY);
-  if (Array.isArray(cached) && cached.length > 0) {
+  if (Array.isArray(cached)) {
     return cached.map(normalizeProduct).filter((p) => p.id);
   }
-  return staticProducts;
+  return [];
 };
 
 export const getCatalogVendors = () => {
   const cached = parseCache(VENDORS_CACHE_KEY);
-  if (Array.isArray(cached) && cached.length > 0) {
+  if (Array.isArray(cached)) {
     return cached.map(normalizeVendor).filter((v) => v.id);
   }
-  return staticVendors;
+  return [];
 };
 
 export const getCatalogBrands = () => {
   const cached = parseCache(BRANDS_CACHE_KEY);
-  if (Array.isArray(cached) && cached.length > 0) {
+  if (Array.isArray(cached)) {
     return cached.map(normalizeBrand).filter((b) => b.id);
   }
-  return staticBrands;
+  return [];
 };
 
 export const getProductById = (id) =>
@@ -207,7 +201,7 @@ export const getSimilarProducts = (currentProductId, limit = 6) => {
 
 export const getRecommendedProducts = (limit = 6) => {
   const products = getCatalogProducts();
-  if (!products.length) return getStaticRecommendedProducts(limit);
+  if (!products.length) return [];
   return [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, limit);
 };
 

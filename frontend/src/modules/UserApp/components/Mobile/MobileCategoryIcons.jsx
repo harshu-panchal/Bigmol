@@ -79,7 +79,7 @@ const MobileCategoryIcons = () => {
 
   const categories = useMemo(() => {
     const roots = getRootCategories().filter((cat) => cat.isActive !== false);
-    if (!roots.length) return fallbackCategories;
+    if (!roots.length) return [];
 
     return roots.map((cat) => {
       const fallback = fallbackCategories.find(

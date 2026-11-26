@@ -80,7 +80,7 @@ const MobileCategories = () => {
   const rootCategories = useMemo(() => {
     const roots = getRootCategories().filter((cat) => cat.isActive !== false);
     if (roots.length === 0) {
-      return fallbackCategories;
+      return [];
     }
     // Keep backend values as source of truth.
     // Use fallback image only when backend category has no image.

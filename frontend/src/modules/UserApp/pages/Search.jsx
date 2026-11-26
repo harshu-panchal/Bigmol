@@ -198,7 +198,7 @@ const MobileSearch = () => {
     if (activeStoreCategories.length) {
       return activeStoreCategories;
     }
-    return fallbackCategories;
+    return [];
   }, [storeCategories]);
 
   const debouncedFilters = useDebounce(filters, 500);
